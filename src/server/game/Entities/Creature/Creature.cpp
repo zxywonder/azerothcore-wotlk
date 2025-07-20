@@ -663,14 +663,19 @@ bool Creature::UpdateEntry(uint32 Entry, const CreatureData* data, bool changele
 
 void Creature::Update(uint32 diff)
 {
+    // 如果AI启用且触发了重生标记，则执行重生相关逻辑
     if (IsAIEnabled && TriggerJustRespawned)
     {
+        // 重置重生触发标记
         TriggerJustRespawned = false;
+        // 调用AI的刚重生回调函数
         AI()->JustRespawned();
+        // 如果有载具组件，则重置载具
         if (m_vehicleKit)
             m_vehicleKit->Reset();
     }
 
+    // 根据生物的死亡状态执行不同的逻辑
     switch (m_deathState)
     {
         case DeathState::JustRespawned:
@@ -683,7 +688,9 @@ void Creature::Update(uint32 diff)
             break;
         case DeathState::Dead:
         {
+            // 获取当前游戏时间
             time_t now = GameTime::GetGameTime().count();
+            // 如果重生时间已到，则执行重生操作
             if (m_respawnTime <= now)
             {
                 Respawn();
@@ -692,28 +699,37 @@ void Creature::Update(uint32 diff)
         }
         case DeathState::Corpse:
         {
+            // 调用基类的更新函数
             Unit::Update(diff);
-            // deathstate changed on spells update, prevent problems
+            // 检查死亡状态是否改变，防止出现问题
             if (m_deathState != DeathState::Corpse)
                 break;
 
+            // 如果存在团队拾取计时器且有团队GUID
             if (m_groupLootTimer && lootingGroupLowGUID)
             {
+                // 如果团队拾取计时器计时结束
                 if (m_groupLootTimer <= diff)
                 {
+                    // 获取团队对象
                     Group* group = sGroupMgr->GetGroupByGUID(lootingGroupLowGUID);
                     if (group)
+                        // 结束团队拾取掷点
                         group->EndRoll(&loot, GetMap());
+                    // 重置团队拾取计时器和团队GUID
                     m_groupLootTimer = 0;
                     lootingGroupLowGUID = 0;
                 }
                 else
                 {
+                    // 减少团队拾取计时器时间
                     m_groupLootTimer -= diff;
                 }
             }
+            // 如果尸体移除时间已到
             else if (m_corpseRemoveTime <= GameTime::GetGameTime().count())
             {
+                // 移除尸体
                 RemoveCorpse(false);
                 LOG_DEBUG("entities.unit", "Removing corpse... {} ", GetUInt32Value(OBJECT_FIELD_ENTRY));
             }
@@ -721,138 +737,174 @@ void Creature::Update(uint32 diff)
         }
         case DeathState::Alive:
         {
+            // 调用基类的更新函数
             Unit::Update(diff);
 
-            // creature can be dead after Unit::Update call
-            // CORPSE/DEAD state will processed at next tick (in other case death timer will be updated unexpectedly)
+            // 生物可能在Unit::Update调用后死亡
+            // CORPSE/DEAD状态将在下一帧处理（否则死亡计时器会意外更新）
             if (!IsAlive())
                 break;
 
-            // if creature is charmed, switch to charmed AI
+            // 如果需要更改AI（例如生物被魅惑）
             if (NeedChangeAI)
             {
+                // 更新魅惑AI
                 UpdateCharmAI();
+                // 重置更改AI标记
                 NeedChangeAI = false;
+                // 启用AI
                 IsAIEnabled = true;
 
-                // xinef: update combat state, if npc is not in combat - return to spawn correctly by calling EnterEvadeMode
+                // xinef: 更新战斗状态，如果NPC不在战斗中，则通过调用EnterEvadeMode正确返回出生点
                 SelectVictim();
             }
 
-            // if periodic combat pulse is enabled and we are both in combat and in a dungeon, do this now
+            // 如果启用了周期性战斗脉冲，且生物在战斗中且处于副本中
             if (m_combatPulseDelay > 0 && IsInCombat() && GetMap()->IsDungeon())
             {
                 if (diff > m_combatPulseTime)
                     m_combatPulseTime = 0;
                 else
+                    // 减少战斗脉冲计时器时间
                     m_combatPulseTime -= diff;
 
+                // 如果战斗脉冲计时器计时结束
                 if (m_combatPulseTime == 0)
                 {
                     if (AI())
+                        // 调用AI的区域战斗函数
                         AI()->DoZoneInCombat();
                     else
+                        // 设置生物与区域进入战斗
                         SetInCombatWithZone();
+                    // 重置战斗脉冲计时器
                     m_combatPulseTime = m_combatPulseDelay * IN_MILLISECONDS;
                 }
             }
 
-            // periodic check to see if the creature has passed an evade boundary
+            // 定期检查生物是否越过了躲避边界
             if (IsAIEnabled && !IsInEvadeMode() && IsEngaged())
             {
                 if (diff >= m_boundaryCheckTime)
                 {
+                    // 调用AI的房间内检查函数
                     AI()->CheckInRoom();
+                    // 重置边界检查计时器
                     m_boundaryCheckTime = 2500;
                 }
                 else
+                    // 减少边界检查计时器时间
                     m_boundaryCheckTime -= diff;
             }
 
+            // 获取魅惑者或所有者
             Unit* owner = GetCharmerOrOwner();
+            // 如果生物被魅惑且不在所有者的可见范围内
             if (IsCharmed() && !IsWithinDistInMap(owner, GetMap()->GetVisibilityRange(), true, false))
             {
+                // 移除魅惑光环
                 RemoveCharmAuras();
             }
 
+            // 如果生物有目标
             if (Unit* victim = GetVictim())
             {
-                // If we are closer than 50% of the combat reach we are going to reposition the victim
+                // 如果我们距离目标过近（小于碰撞半径之和），则重新定位目标
                 if (diff >= m_moveBackwardsMovementTime)
                 {
+                    // 计算最大允许距离
                     float MaxRange = GetCollisionRadius() + GetVictim()->GetCollisionRadius();
 
                     if (IsInDist(victim, MaxRange))
+                        // 调用AI的向后移动检查函数
                         AI()->MoveBackwardsChecks();
 
+                    // 重置向后移动检查计时器
                     m_moveBackwardsMovementTime = urand(MOVE_BACKWARDS_CHECK_INTERVAL, MOVE_BACKWARDS_CHECK_INTERVAL * 3);
                 }
                 else
+                    // 减少向后移动检查计时器时间
                     m_moveBackwardsMovementTime -= diff;
 
-                // Circling the target
+                // 环绕目标移动检查
                 if (diff >= m_moveCircleMovementTime)
                 {
+                    // 调用AI的环绕移动检查函数
                     AI()->MoveCircleChecks();
+                    // 重置环绕移动检查计时器
                     m_moveCircleMovementTime = urand(MOVE_CIRCLE_CHECK_INTERVAL, MOVE_CIRCLE_CHECK_INTERVAL * 2);
                 }
                 else
+                    // 减少环绕移动检查计时器时间
                     m_moveCircleMovementTime -= diff;
 
-                // Periodically check if able to move, if not, extend leash timer
+                // 定期检查是否能够移动，如果不能，则延长牵引计时器
                 if (diff >= m_extendLeashTime)
                 {
                     if (!CanFreeMove())
+                        // 更新牵引延长时间
                         UpdateLeashExtensionTime();
+                    // 重置牵引检查计时器
                     m_extendLeashTime = EXTEND_LEASH_CHECK_INTERVAL;
                 }
                 else
+                    // 减少牵引检查计时器时间
                     m_extendLeashTime -= diff;
             }
 
-            // Call for assistance if not disabled
+            // 如果允许呼叫援助且计时器存在
             if (m_assistanceTimer)
             {
+                // 如果援助计时器计时结束
                 if (m_assistanceTimer <= diff)
                 {
                     if (CanPeriodicallyCallForAssistance())
                     {
+                        // 允许呼叫援助
                         SetNoCallAssistance(false);
+                        // 呼叫援助
                         CallAssistance();
                     }
+                    // 重置援助计时器
                     m_assistanceTimer = sWorld->getIntConfig(CONFIG_CREATURE_FAMILY_ASSISTANCE_PERIOD);
                 }
                 else
                 {
+                    // 减少援助计时器时间
                     m_assistanceTimer -= diff;
                 }
             }
 
+            // 如果生物不在躲避模式且AI启用
             if (!IsInEvadeMode() && IsAIEnabled)
             {
-                // do not allow the AI to be changed during update
+                // 禁止在更新期间更改AI
                 m_AI_locked = true;
+                // 调用AI的更新函数
                 i_AI->UpdateAI(diff);
+                // 解除AI锁定
                 m_AI_locked = false;
             }
 
-            // creature can be dead after UpdateAI call
-            // CORPSE/DEAD state will processed at next tick (in other case death timer will be updated unexpectedly)
+            // 生物可能在UpdateAI调用后死亡
+            // CORPSE/DEAD状态将在下一帧处理（否则死亡计时器会意外更新）
             if (!IsAlive())
                 break;
 
+            // 减少再生计时器时间
             m_regenTimer -= diff;
+            // 如果再生计时器计时结束
             if (m_regenTimer <= 0)
             {
                 if (!IsInEvadeMode())
                 {
-                    // regenerate health if not in combat or if polymorphed)
+                    // 如果不在战斗中或被变形，则恢复生命值
                     if (!IsInCombat() || IsPolymorphed())
                         RegenerateHealth();
+                    // 如果无法到达目标且需要恢复生命值
                     else if (IsNotReachableAndNeedRegen())
                     {
-                        // regenerate health if cannot reach the target and the setting is set to do so.
-                        // this allows to disable the health regen of raid bosses if pathfinding has issues for whatever reason
+                        // 如果配置允许或不在团队副本中，则恢复生命值
                         if (sWorld->getBoolConfig(CONFIG_REGEN_HP_CANNOT_REACH_TARGET_IN_RAID) || !GetMap()->IsRaid())
                         {
                             RegenerateHealth();
@@ -863,47 +915,62 @@ void Creature::Update(uint32 diff)
                     }
                 }
 
+                // 如果能量类型为能量，则恢复能量，否则恢复法力值
                 if (getPowerType() == POWER_ENERGY)
                     Regenerate(POWER_ENERGY);
                 else
                     Regenerate(POWER_MANA);
 
+                // 重置再生计时器
                 m_regenTimer += CREATURE_REGEN_INTERVAL;
             }
 
+            // 如果无法到达目标且不在躲避模式
             if (CanNotReachTarget() && !IsInEvadeMode())
             {
+                // 增加无法到达目标计时器时间
                 m_cannotReachTimer += diff;
                 if (m_cannotReachTimer >= (sWorld->getIntConfig(CONFIG_NPC_EVADE_IF_NOT_REACHABLE) * IN_MILLISECONDS))
                 {
+                    // 获取无法到达的玩家对象
                     Player* cannotReachPlayer = ObjectAccessor::GetPlayer(*this, m_cannotReachTarget);
                     if (cannotReachPlayer && IsEngagedBy(cannotReachPlayer) && IsAIEnabled && AI()->OnTeleportUnreacheablePlayer(cannotReachPlayer))
                     {
+                        // 设置无法到达目标状态
                         SetCannotReachTarget();
                     }
+                    // 如果不在团队副本中
                     else if (!GetMap()->IsRaid())
                     {
+                        // 定义进入躲避模式的lambda函数
                         auto EnterEvade = [&]()
                         {
                             if (CreatureAI* ai = AI())
                             {
+                                // 调用AI的进入躲避模式函数
                                 ai->EnterEvadeMode(CreatureAI::EvadeReason::EVADE_REASON_NO_PATH);
                             }
                         };
 
+                        // 如果威胁列表中的目标数量小于等于1
                         if (GetThreatMgr().GetThreatListSize() <= 1)
                         {
+                            // 进入躲避模式
                             EnterEvade();
                         }
                         else
                         {
+                            // 获取目标在威胁列表中的引用
                             if (HostileReference* ref = GetThreatMgr().GetOnlineContainer().getReferenceByTarget(m_cannotReachTarget))
                             {
+                                // 移除该目标的威胁引用
                                 ref->removeReference();
+                                // 设置无法到达目标状态
                                 SetCannotReachTarget();
                             }
                             else
                             {
+                                // 进入躲避模式
                                 EnterEvade();
                             }
                         }
@@ -916,29 +983,40 @@ void Creature::Update(uint32 diff)
             break;
     }
 
+    // 如果生物在世界中且不在移除过程中
     if (IsInWorld() && !IsDuringRemoveFromWorld())
     {
         // pussywizard:
+        // 如果所有者是玩家
         if (GetOwnerGUID().IsPlayer())
         {
+            // 如果运输检查计时器计时结束
             if (m_transportCheckTimer <= diff)
             {
+                // 重置运输检查计时器
                 m_transportCheckTimer = 1000;
+                // 获取新的运输载具
                 Transport* newTransport = GetMap()->GetTransportForPos(GetPhaseMask(), GetPositionX(), GetPositionY(), GetPositionZ(), this);
+                // 如果新的运输载具与当前不同
                 if (newTransport != GetTransport())
                 {
                     if (GetTransport())
+                        // 从当前运输载具移除乘客
                         GetTransport()->RemovePassenger(this, true);
                     if (newTransport)
+                        // 添加到新的运输载具
                         newTransport->AddPassenger(this, true);
+                    // 在当前位置停止移动
                     this->StopMovingOnCurrentPos();
                     //SendMovementFlagUpdate();
                 }
             }
             else
+                // 减少运输检查计时器时间
                 m_transportCheckTimer -= diff;
         }
 
+        // 调用脚本管理器的生物更新回调函数
         sScriptMgr->OnCreatureUpdate(this, diff);
     }
 }

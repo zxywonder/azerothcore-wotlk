@@ -17,54 +17,54 @@
 
 #include "BoundingIntervalHierarchy.h"
 
-// ¶¨Òå isnan ºê£¬¼æÈİ MSVC ºÍÆäËû±àÒëÆ÷
+// å®šä¹‰ isnan å®ï¼Œå…¼å®¹ MSVC å’Œå…¶ä»–ç¼–è¯‘å™¨
 #ifdef _MSC_VER
 #define isnan _isnan
 #else
 #define isnan std::isnan
 #endif
 
-// ¹¹½¨ BIH ²ã´Î½á¹¹
+// æ„å»º BIH å±‚æ¬¡ç»“æ„
 void BIH::buildHierarchy(std::vector<uint32>& tempTree, buildData& dat, BuildStats& stats)
 {
-    // ÎªµÚÒ»¸ö½ÚµãÔ¤Áô¿Õ¼ä
+    // ä¸ºç¬¬ä¸€ä¸ªèŠ‚ç‚¹é¢„ç•™ç©ºé—´
     // cppcheck-suppress integerOverflow
     tempTree.push_back(uint32(3 << 30)); // dummy leaf
     tempTree.insert(tempTree.end(), 2, 0);
     //tempTree.add(0);
 
-    // ³õÊ¼»¯°üÎ§ºĞ
+    // åˆå§‹åŒ–åŒ…å›´ç›’
     AABound gridBox = { bounds.low(), bounds.high() };
     AABound nodeBox = gridBox;
-    // µİ¹é·Ö¸îº¯Êı
+    // é€’å½’åˆ†å‰²å‡½æ•°
     subdivide(0, dat.numPrims - 1, tempTree, dat, gridBox, nodeBox, 0, 1, stats);
 }
 
-// µİ¹é·Ö¸îº¯Êı£¬¹¹½¨ BIH Ê÷
+// é€’å½’åˆ†å‰²å‡½æ•°ï¼Œæ„å»º BIH æ ‘
 void BIH::subdivide(int left, int right, std::vector<uint32>& tempTree, buildData& dat, AABound& gridBox, AABound& nodeBox, int nodeIndex, int depth, BuildStats& stats)
 {
-    // Èç¹ûµ±Ç°½Úµã°üº¬µÄÍ¼ÔªÊıÁ¿Ğ¡ÓÚµÈÓÚ×î´óÒ¶×Ó½ÚµãÍ¼ÔªÊı »òÕß ´ïµ½×î´óµİ¹éÉî¶È£¬Ôò´´½¨Ò¶×Ó½Úµã
+    // å¦‚æœå½“å‰èŠ‚ç‚¹åŒ…å«çš„å›¾å…ƒæ•°é‡å°äºç­‰äºæœ€å¤§å¶å­èŠ‚ç‚¹å›¾å…ƒæ•° æˆ–è€… è¾¾åˆ°æœ€å¤§é€’å½’æ·±åº¦ï¼Œåˆ™åˆ›å»ºå¶å­èŠ‚ç‚¹
     if ((right - left + 1) <= dat.maxPrims || depth >= MAX_STACK_SIZE)
     {
-        // ´´½¨Ò¶×Ó½Úµã
+        // åˆ›å»ºå¶å­èŠ‚ç‚¹
         stats.updateLeaf(depth, right - left + 1);
         createNode(tempTree, nodeIndex, left, right);
         return;
     }
 
-    // ³õÊ¼»¯·Ö¸î²ÎÊı
+    // åˆå§‹åŒ–åˆ†å‰²å‚æ•°
     int axis = -1, prevAxis, rightOrig;
     float clipL = G3D::fnan(), clipR = G3D::fnan(), prevClip = G3D::fnan();
     float split = G3D::fnan(), prevSplit;
     bool wasLeft = true;
 
-    // ¿ªÊ¼·Ö¸îÑ­»·
+    // å¼€å§‹åˆ†å‰²å¾ªç¯
     while (true)
     {
         prevAxis = axis;
         prevSplit = split;
 
-        // Ö´ĞĞÒ»ÖÂĞÔ¼ì²é
+        // æ‰§è¡Œä¸€è‡´æ€§æ£€æŸ¥
         G3D::Vector3 d( gridBox.hi - gridBox.lo );
         if (d.x < 0 || d.y < 0 || d.z < 0)
         {
@@ -78,18 +78,18 @@ void BIH::subdivide(int left, int right, std::vector<uint32>& tempTree, buildDat
             }
         }
 
-        // ÕÒµ½×î³¤Öá½øĞĞ·Ö¸î
+        // æ‰¾åˆ°æœ€é•¿è½´è¿›è¡Œåˆ†å‰²
         axis = d.primaryAxis();
         split = 0.5f * (gridBox.lo[axis] + gridBox.hi[axis]);
 
-        // ·Ö¸î×óÓÒ×Ó¼¯
+        // åˆ†å‰²å·¦å³å­é›†
         clipL = -G3D::inf();
         clipR = G3D::inf();
-        rightOrig = right; // ±£´æÔ­Ê¼ÓÒ±ß½ç
+        rightOrig = right; // ä¿å­˜åŸå§‹å³è¾¹ç•Œ
         float nodeL = G3D::inf();
         float nodeR = -G3D::inf();
 
-        // ¸ù¾İ·Ö¸îÖá¶ÔÍ¼Ôª½øĞĞ×óÓÒ·ÖÇø
+        // æ ¹æ®åˆ†å‰²è½´å¯¹å›¾å…ƒè¿›è¡Œå·¦å³åˆ†åŒº
         for (int i = left; i <= right;)
         {
             int obj = dat.indices[i];
@@ -119,26 +119,26 @@ void BIH::subdivide(int left, int right, std::vector<uint32>& tempTree, buildDat
             nodeR = std::max(nodeR, maxb);
         }
 
-        // ¼ì²é¿Õ¿Õ¼ä
+        // æ£€æŸ¥ç©ºç©ºé—´
         if (nodeL > nodeBox.lo[axis] && nodeR < nodeBox.hi[axis])
         {
             float nodeBoxW = nodeBox.hi[axis] - nodeBox.lo[axis];
             float nodeNewW = nodeR - nodeL;
-            // Èç¹û½Úµã°üÎ§ºĞ¹ı´ó£¬´´½¨ BVH2 ½Úµã
+            // å¦‚æœèŠ‚ç‚¹åŒ…å›´ç›’è¿‡å¤§ï¼Œåˆ›å»º BVH2 èŠ‚ç‚¹
             if (1.3f * nodeNewW < nodeBoxW)
             {
                 stats.updateBVH2();
                 int nextIndex = tempTree.size();
-                // ·ÖÅä×Ó½Úµã¿Õ¼ä
+                // åˆ†é…å­èŠ‚ç‚¹ç©ºé—´
                 tempTree.push_back(0);
                 tempTree.push_back(0);
                 tempTree.push_back(0);
-                // Ğ´Èë BVH2 ½Úµã
+                // å†™å…¥ BVH2 èŠ‚ç‚¹
                 stats.updateInner();
                 tempTree[nodeIndex + 0] = (axis << 30) | (1 << 29) | nextIndex;
                 tempTree[nodeIndex + 1] = floatToRawIntBits(nodeL);
                 tempTree[nodeIndex + 2] = floatToRawIntBits(nodeR);
-                // ¸üĞÂ½Úµã°üÎ§ºĞ²¢µİ¹é
+                // æ›´æ–°èŠ‚ç‚¹åŒ…å›´ç›’å¹¶é€’å½’
                 nodeBox.lo[axis] = nodeL;
                 nodeBox.hi[axis] = nodeR;
                 subdivide(left, rightOrig, tempTree, dat, gridBox, nodeBox, nextIndex, depth + 1, stats);
@@ -146,10 +146,10 @@ void BIH::subdivide(int left, int right, std::vector<uint32>& tempTree, buildDat
             }
         }
 
-        // È·±£·Ö¸îÓĞ½øÕ¹
+        // ç¡®ä¿åˆ†å‰²æœ‰è¿›å±•
         if (right == rightOrig)
         {
-            // È«²¿ÔÚ×ó±ß
+            // å…¨éƒ¨åœ¨å·¦è¾¹
             if (prevAxis == axis && G3D::fuzzyEq(prevSplit, split))
             {
                 stats.updateLeaf(depth, right - left + 1);
@@ -168,7 +168,7 @@ void BIH::subdivide(int left, int right, std::vector<uint32>& tempTree, buildDat
         }
         else if (left > right)
         {
-            // È«²¿ÔÚÓÒ±ß
+            // å…¨éƒ¨åœ¨å³è¾¹
             right = rightOrig;
             if (prevAxis == axis && G3D::fuzzyEq(prevSplit, split))
             {
@@ -188,7 +188,7 @@ void BIH::subdivide(int left, int right, std::vector<uint32>& tempTree, buildDat
         }
         else
         {
-            // Êµ¼Ê·Ö¸îÁËÊı¾İ
+            // å®é™…åˆ†å‰²äº†æ•°æ®
             if (prevAxis != -1 && !isnan(prevClip))
             {
                 int nextIndex = tempTree.size();
@@ -217,12 +217,12 @@ void BIH::subdivide(int left, int right, std::vector<uint32>& tempTree, buildDat
         }
     }
 
-    // ¼ÆËã×Ó½ÚµãË÷Òı
+    // è®¡ç®—å­èŠ‚ç‚¹ç´¢å¼•
     int nextIndex = tempTree.size();
     int nl = right - left + 1;
     int nr = rightOrig - (right + 1) + 1;
 
-    // ·ÖÅä×ó×Ó½Úµã¿Õ¼ä
+    // åˆ†é…å·¦å­èŠ‚ç‚¹ç©ºé—´
     if (nl > 0)
     {
         tempTree.push_back(0);
@@ -234,7 +234,7 @@ void BIH::subdivide(int left, int right, std::vector<uint32>& tempTree, buildDat
         nextIndex -= 3;
     }
 
-    // ·ÖÅäÓÒ×Ó½Úµã¿Õ¼ä
+    // åˆ†é…å³å­èŠ‚ç‚¹ç©ºé—´
     if (nr > 0)
     {
         tempTree.push_back(0);
@@ -242,20 +242,20 @@ void BIH::subdivide(int left, int right, std::vector<uint32>& tempTree, buildDat
         tempTree.push_back(0);
     }
 
-    // Ğ´ÈëÄÚ²¿½Úµã
+    // å†™å…¥å†…éƒ¨èŠ‚ç‚¹
     stats.updateInner();
     tempTree[nodeIndex + 0] = (axis << 30) | nextIndex;
     tempTree[nodeIndex + 1] = floatToRawIntBits(clipL);
     tempTree[nodeIndex + 2] = floatToRawIntBits(clipR);
 
-    // ×¼±¸×óÓÒ×Ó½Úµã°üÎ§ºĞ
+    // å‡†å¤‡å·¦å³å­èŠ‚ç‚¹åŒ…å›´ç›’
     AABound gridBoxL(gridBox), gridBoxR(gridBox);
     AABound nodeBoxL(nodeBox), nodeBoxR(nodeBox);
     gridBoxL.hi[axis] = gridBoxR.lo[axis] = split;
     nodeBoxL.hi[axis] = clipL;
     nodeBoxR.lo[axis] = clipR;
 
-    // µİ¹é´¦Àí×óÓÒ×Ó½Úµã
+    // é€’å½’å¤„ç†å·¦å³å­èŠ‚ç‚¹
     if (nl > 0)
     {
         subdivide(left, right, tempTree, dat, gridBoxL, nodeBoxL, nextIndex, depth + 1, stats);
@@ -274,7 +274,7 @@ void BIH::subdivide(int left, int right, std::vector<uint32>& tempTree, buildDat
     }
 }
 
-// ½« BIH Êı¾İĞ´ÈëÎÄ¼ş
+// å°† BIH æ•°æ®å†™å…¥æ–‡ä»¶
 bool BIH::writeToFile(FILE* wf) const
 {
     uint32 treeSize = tree.size();
@@ -289,7 +289,7 @@ bool BIH::writeToFile(FILE* wf) const
     return check == (3 + 3 + 2 + treeSize + count);
 }
 
-// ´ÓÎÄ¼ş¶ÁÈ¡ BIH Êı¾İ
+// ä»æ–‡ä»¶è¯»å– BIH æ•°æ®
 bool BIH::readFromFile(FILE* rf)
 {
     uint32 treeSize;
@@ -307,7 +307,7 @@ bool BIH::readFromFile(FILE* rf)
     return uint64(check) == uint64(3 + 3 + 1 + 1 + uint64(treeSize) + uint64(count));
 }
 
-// ¸üĞÂÒ¶×Ó½ÚµãÍ³¼ÆĞÅÏ¢
+// æ›´æ–°å¶å­èŠ‚ç‚¹ç»Ÿè®¡ä¿¡æ¯
 void BIH::BuildStats::updateLeaf(int depth, int n)
 {
     numLeaves++;
@@ -321,7 +321,7 @@ void BIH::BuildStats::updateLeaf(int depth, int n)
     ++numLeavesN[nl];
 }
 
-// ´òÓ¡¹¹½¨Í³¼ÆĞÅÏ¢
+// æ‰“å°æ„å»ºç»Ÿè®¡ä¿¡æ¯
 void BIH::BuildStats::printStats()
 {
     printf("Tree stats:\n");

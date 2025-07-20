@@ -382,102 +382,150 @@ Unit::~Unit()
 
 void Unit::Update(uint32 p_time)
 {
+    // 调用脚本管理器的单位更新回调函数
     sScriptMgr->OnUnitUpdate(this, p_time);
 
     // WARNING! Order of execution here is important, do not change.
     // Spells must be processed with event system BEFORE they go to _UpdateSpells.
     // Or else we may have some SPELL_STATE_FINISHED spells stalled in pointers, that is bad.
+    // 调用父类 WorldObject 的更新函数
     WorldObject::Update(p_time);
 
+    // 如果单位不在世界中，则直接返回，不进行后续更新操作
     if (!IsInWorld())
         return;
 
     // pussywizard:
+    // 如果不是玩家，或者是玩家但没有正在被传送且没有强制可见性更新请求
     if (!IsPlayer() || (!ToPlayer()->IsBeingTeleported() && !bRequestForcedVisibilityUpdate))
     {
+        // 处理延迟的单位位置重定位计时器
         if (m_delayed_unit_relocation_timer)
         {
+            // 如果延迟计时器剩余时间小于等于本次更新时间
             if (m_delayed_unit_relocation_timer <= p_time)
             {
+                // 重置延迟计时器
                 m_delayed_unit_relocation_timer = 0;
                 //ExecuteDelayedUnitRelocationEvent();
+                // 将该单位插入到地图的延迟可见性对象集合中
                 FindMap()->i_objectsForDelayedVisibility.insert(this);
             }
             else
+            {
+                // 减少延迟计时器的剩余时间
                 m_delayed_unit_relocation_timer -= p_time;
+            }
         }
+        // 处理延迟的单位 AI 通知计时器
         if (m_delayed_unit_ai_notify_timer)
         {
+            // 如果延迟计时器剩余时间小于等于本次更新时间
             if (m_delayed_unit_ai_notify_timer <= p_time)
             {
+                // 重置延迟计时器
                 m_delayed_unit_ai_notify_timer = 0;
+                // 执行延迟的单位 AI 通知事件
                 ExecuteDelayedUnitAINotifyEvent();
             }
             else
+            {
+                // 减少延迟计时器的剩余时间
                 m_delayed_unit_ai_notify_timer -= p_time;
+            }
         }
     }
 
+    // 更新单位的法术状态
     _UpdateSpells( p_time );
 
+    // 如果单位可以拥有仇恨列表，并且仇恨管理器需要更新到客户端
     if (CanHaveThreatList() && GetThreatMgr().isNeedUpdateToClient(p_time))
+    {
+        // 发送仇恨列表更新
         SendThreatListUpdate();
+    }
 
-    // update combat timer only for players and pets (only pets with PetAI)
+    // 仅为玩家和宠物（仅带有 PetAI 的宠物）更新战斗计时器
     if (IsInCombat() && (IsPlayer() || ((IsPet() || HasUnitTypeMask(UNIT_MASK_CONTROLLABLE_GUARDIAN)) && IsControlledByPlayer())))
     {
         // Check UNIT_STATE_MELEE_ATTACKING or UNIT_STATE_CHASE (without UNIT_STATE_FOLLOW in this case) so pets can reach far away
         // targets without stopping half way there and running off.
         // These flags are reset after target dies or another command is given.
+        // 如果敌对引用管理器为空
         if (m_HostileRefMgr.IsEmpty())
         {
             // m_CombatTimer set at aura start and it will be freeze until aura removing
+            // 如果战斗计时器剩余时间小于等于本次更新时间
             if (m_CombatTimer <= p_time)
+            {
+                // 清除战斗状态
                 ClearInCombat();
+            }
             else
+            {
+                // 减少战斗计时器的剩余时间
                 m_CombatTimer -= p_time;
+            }
         }
     }
 
+    // 重置最后受到伤害的目标 GUID
     _lastDamagedTargetGuid = ObjectGuid::Empty;
+    // 如果存在最后一次额外攻击法术
     if (_lastExtraAttackSpell)
     {
+        // 遍历额外攻击目标列表
         while (!extraAttacksTargets.empty())
         {
+            // 获取列表中的第一个目标
             auto itr = extraAttacksTargets.begin();
             ObjectGuid targetGuid = itr->first;
             uint32 count = itr->second;
+            // 从列表中移除该目标
             extraAttacksTargets.erase(itr);
+            // 通过目标 GUID 获取目标单位
             if (Unit* victim = ObjectAccessor::GetUnit(*this, targetGuid))
             {
+                // 如果最后一次额外攻击法术是剑专精、猛砍，或者目标在近战范围内
                 if (_lastExtraAttackSpell == SPELL_SWORD_SPECIALIZATION || _lastExtraAttackSpell == SPELL_HACK_AND_SLASH
                     || victim->IsWithinMeleeRange(this))
                 {
+                    // 处理针对该目标的额外攻击
                     HandleProcExtraAttackFor(victim, count);
                 }
             }
         }
+        // 重置最后一次额外攻击法术
         _lastExtraAttackSpell = 0;
     }
 
     // not implemented before 3.0.2
     // xinef: if attack time > 0, reduce by diff
     // if on next update, attack time < 0 assume player didnt attack - set to 0
+    // 标记是否暂停基础攻击计时器
     bool suspendAttackTimer = false;
+    // 标记是否暂停远程攻击计时器
     bool suspendRangedAttackTimer = false;
+    // 如果是玩家且处于施法状态
     if (IsPlayer() && HasUnitState(UNIT_STATE_CASTING))
     {
+        // 遍历当前所有法术
         for (Spell* spell : m_currentSpells)
         {
             if (spell)
             {
+                // 如果法术具有不重置战斗计时器的属性
                 if (spell->GetSpellInfo()->HasAttribute(SPELL_ATTR2_DO_NOT_RESET_COMBAT_TIMERS))
                 {
+                    // 如果法术正在引导
                     if (spell->IsChannelActive())
                     {
+                        // 暂停远程攻击计时器
                         suspendRangedAttackTimer = true;
                     }
 
+                    // 暂停基础攻击计时器
                     suspendAttackTimer = true;
                     break;
                 }
@@ -485,37 +533,51 @@ void Unit::Update(uint32 p_time)
         }
     }
 
+    // 如果不暂停基础攻击计时器
     if (!suspendAttackTimer)
     {
+        // 获取基础攻击计时器的值
         if (int32 base_attack = getAttackTimer(BASE_ATTACK))
         {
+            // 更新基础攻击计时器的值，确保不小于 0
             setAttackTimer(BASE_ATTACK, base_attack > 0 ? base_attack - (int32) p_time : 0);
         }
 
+        // 获取副手攻击计时器的值
         if (int32 off_attack = getAttackTimer(OFF_ATTACK))
         {
+            // 更新副手攻击计时器的值，确保不小于 0
             setAttackTimer(OFF_ATTACK, off_attack > 0 ? off_attack - (int32) p_time : 0);
         }
     }
 
+    // 如果不暂停远程攻击计时器
     if (!suspendRangedAttackTimer)
     {
+        // 获取远程攻击计时器的值
         if (int32 ranged_attack = getAttackTimer(RANGED_ATTACK))
         {
+            // 更新远程攻击计时器的值，确保不小于 0
             setAttackTimer(RANGED_ATTACK, ranged_attack > 0 ? ranged_attack - (int32)p_time : 0);
         }
     }
 
-    // update abilities available only for fraction of time
+    // 更新仅在部分时间可用的技能
     UpdateReactives(p_time);
 
+    // 根据生命值百分比修改低于 20% 生命值的光环状态
     ModifyAuraState(AURA_STATE_HEALTHLESS_20_PERCENT, IsAlive() ? HealthBelowPct(20) : false);
+    // 根据生命值百分比修改低于 35% 生命值的光环状态
     ModifyAuraState(AURA_STATE_HEALTHLESS_35_PERCENT, IsAlive() ? HealthBelowPct(35) : false);
+    // 根据生命值百分比修改高于 75% 生命值的光环状态
     ModifyAuraState(AURA_STATE_HEALTH_ABOVE_75_PERCENT, IsAlive() ? HealthAbovePct(75) : false);
 
+    // 更新样条移动状态
     UpdateSplineMovement(p_time);
+    // 更新移动管理器的状态
     GetMotionMaster()->UpdateMotion(p_time);
 
+    // 使值更新缓存无效
     InvalidateValuesUpdateCache();
 }
 
@@ -573,63 +635,78 @@ private:
     Unit* _unit;
 };
 
+// 更新样条移动状态
 void Unit::UpdateSplineMovement(uint32 t_diff)
 {
+    // 如果样条移动已经完成，直接返回
     if (movespline->Finalized())
         return;
 
-    // xinef: process movementinform
-    // this code cant be placed inside EscortMovementGenerator, because we cant delete active MoveGen while it is updated
+    // xinef: 处理移动信息
+    // 此代码不能放在 EscortMovementGenerator 内部，因为在更新时不能删除活动的 MoveGen
     SplineHandler handler(this);
+    // 更新样条移动状态
     movespline->updateState(t_diff, handler);
-    // Xinef: Spline was cleared by StopMoving, return
+    // Xinef: 样条移动被 StopMoving 清除，返回
     if (!movespline->Initialized())
     {
+        // 禁用样条移动
         DisableSpline();
         return;
     }
 
+    // 判断是否到达目标位置
     bool arrived = movespline->Finalized();
 
     if (arrived)
     {
+        // 禁用样条移动
         DisableSpline();
 
+        // 如果样条移动有动画，且单位是生物并且存活，则设置动画层级
         if (movespline->HasAnimation() && IsCreature() && IsAlive())
             SetByteValue(UNIT_FIELD_BYTES_1, UNIT_BYTES_1_OFFSET_ANIM_TIER, movespline->GetAnimationType());
     }
 
-    // pussywizard: update always! not every 400ms, because movement generators need the actual position
+    // pussywizard: 始终更新！不是每 400ms 更新一次，因为移动生成器需要实际位置
     //m_movesplineTimer.Update(t_diff);
     //if (m_movesplineTimer.Passed() || arrived)
+    // 更新样条移动位置
     UpdateSplinePosition();
 }
 
+// 更新样条移动位置
 void Unit::UpdateSplinePosition()
 {
     //static uint32 const positionUpdateDelay = 400;
 
     //m_movesplineTimer.Reset(positionUpdateDelay);
+    // 计算当前样条移动的位置
     Movement::Location loc = movespline->ComputePosition();
 
+    // 如果单位在载具上
     if (movespline->onTransport)
     {
+        // 获取载具上的位置信息
         Position& pos = m_movementInfo.transport.pos;
         pos.m_positionX = loc.x;
         pos.m_positionY = loc.y;
         pos.m_positionZ = loc.z;
         pos.SetOrientation(loc.orientation);
 
+        // 如果存在直接载具，则计算乘客在载具上的实际位置
         if (TransportBase* transport = GetDirectTransport())
             transport->CalculatePassengerPosition(loc.x, loc.y, loc.z, &loc.orientation);
     }
 
-    // Xinef: if we had spline running update orientation along with position
+    // Xinef: 如果有样条移动正在运行，同时更新朝向
     //if (HasUnitState(UNIT_STATE_CANNOT_TURN))
     //    loc.orientation = GetOrientation();
 
+    // 如果是玩家，调用玩家的位置更新方法
     if (IsPlayer())
         UpdatePosition(loc.x, loc.y, loc.z, loc.orientation);
+    // 如果是生物，调用生物的位置设置方法
     else
         ToCreature()->SetPosition(loc.x, loc.y, loc.z, loc.orientation);
 }
