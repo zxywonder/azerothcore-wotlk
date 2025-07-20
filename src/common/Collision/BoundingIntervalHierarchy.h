@@ -37,6 +37,7 @@
 
 static inline uint32 floatToRawIntBits(float f)
 {
+    // 静态断言确保float和uint32大小相同，否则无法进行位转换
     static_assert(sizeof(float) == sizeof(uint32), "Size of uint32 and float must be equal for this to work");
     uint32 ret;
     memcpy(&ret, &f, sizeof(float));
@@ -45,24 +46,25 @@ static inline uint32 floatToRawIntBits(float f)
 
 static inline float intBitsToFloat(uint32 i)
 {
+    // 静态断言确保float和uint32大小相同，否则无法进行位转换
     static_assert(sizeof(float) == sizeof(uint32), "Size of uint32 and float must be equal for this to work");
     float ret;
     memcpy(&ret, &i, sizeof(uint32));
     return ret;
 }
 
+// 轴对齐包围盒结构体
 struct AABound
 {
     G3D::Vector3 lo, hi;
 };
 
-/** Bounding Interval Hierarchy Class.
-    Building and Ray-Intersection functions based on BIH from
-    Sunflow, a Java Raytracer, released under MIT/X11 License
+/** Bounding Interval Hierarchy 类。
+    构建和光线相交函数基于 Sunflow 中的 BIH 实现，
+    Sunflow 是一个使用 Java 编写的光线追踪器，使用 MIT/X11 协议发布
     http://sunflow.sourceforge.net/
     Copyright (c) 2003-2007 Christopher Kulla
 */
-
 class BIH
 {
 private:
@@ -70,12 +72,22 @@ private:
     {
         tree.clear();
         objects.clear();
-        // create space for the first node
+        // 为第一个节点预留空间
         tree.push_back(3u << 30u); // dummy leaf
         tree.insert(tree.end(), 2, 0);
     }
 public:
     BIH() { init_empty(); }
+
+    /**
+     * 构建 BIH 层次结构
+     * @tparam BoundsFunc 用于获取包围盒的函数对象类型
+     * @tparam PrimArray 原始图元数组类型
+     * @param primitives 原始图元集合
+     * @param GetBounds 获取包围盒的函数
+     * @param leafSize 叶子节点最大图元数
+     * @param printStats 是否打印构建统计信息
+     */
     template< class BoundsFunc, class PrimArray >
     void build(const PrimArray& primitives, BoundsFunc& GetBounds, uint32 leafSize = 3, bool printStats = false)
     {
@@ -115,8 +127,18 @@ public:
         delete[] dat.primBound;
         delete[] dat.indices;
     }
+
+    // 返回图元数量
     [[nodiscard]] uint32 primCount() const { return objects.size(); }
 
+    /**
+     * 光线相交检测
+     * @tparam RayCallback 回调函数类型
+     * @param r 光线对象
+     * @param intersectCallback 相交回调函数
+     * @param maxDist 最大相交距离
+     * @param stopAtFirstHit 是否在第一次命中时停止
+     */
     template<typename RayCallback>
     void intersectRay(const G3D::Ray& r, RayCallback& intersectCallback, float& maxDist, bool stopAtFirstHit) const
     {
@@ -144,8 +166,8 @@ public:
                 {
                     intervalMax = t2;
                 }
-                // intervalMax can only become smaller for other axis,
-                //  and intervalMin only larger respectively, so stop early
+                // intervalMax 可能因其他轴而变得更小，
+                // intervalMin 可能因其他轴而变大，所以可以提前终止
                 if (intervalMax <= 0 || intervalMin >= maxDist)
                 {
                     return;
@@ -164,7 +186,7 @@ public:
         uint32 offsetBack[3];
         uint32 offsetFront3[3];
         uint32 offsetBack3[3];
-        // compute custom offsets from direction sign bit
+        // 根据方向符号位计算偏移量
 
         for (int i = 0; i < 3; ++i)
         {
@@ -173,7 +195,7 @@ public:
             offsetFront3[i] = offsetFront[i] * 3;
             offsetBack3[i] = offsetBack[i] * 3;
 
-            // avoid always adding 1 during the inner loop
+            // 避免在内循环中总是加1
             ++offsetFront[i];
             ++offsetBack[i];
         }
@@ -194,42 +216,42 @@ public:
                 {
                     if (axis < 3)
                     {
-                        // "normal" interior node
+                        // "正常" 内部节点
                         float tf = (intBitsToFloat(tree[node + offsetFront[axis]]) - org[axis]) * invDir[axis];
                         float tb = (intBitsToFloat(tree[node + offsetBack[axis]]) - org[axis]) * invDir[axis];
-                        // ray passes between clip zones
+                        // 光线穿过两个剪裁区域之间
                         if (tf < intervalMin && tb > intervalMax)
                         {
                             break;
                         }
                         int back = offset + offsetBack3[axis];
                         node = back;
-                        // ray passes through far node only
+                        // 光线只穿过远节点
                         if (tf < intervalMin)
                         {
                             intervalMin = (tb >= intervalMin) ? tb : intervalMin;
                             continue;
                         }
-                        node = offset + offsetFront3[axis]; // front
-                        // ray passes through near node only
+                        node = offset + offsetFront3[axis]; // 前节点
+                        // 光线只穿过近节点
                         if (tb > intervalMax)
                         {
                             intervalMax = (tf <= intervalMax) ? tf : intervalMax;
                             continue;
                         }
-                        // ray passes through both nodes
-                        // push back node
+                        // 光线穿过两个节点
+                        // 压栈远节点
                         stack[stackPos].node = back;
                         stack[stackPos].tnear = (tb >= intervalMin) ? tb : intervalMin;
                         stack[stackPos].tfar = intervalMax;
                         stackPos++;
-                        // update ray interval for front node
+                        // 更新前节点的光线区间
                         intervalMax = (tf <= intervalMax) ? tf : intervalMax;
                         continue;
                     }
                     else
                     {
-                        // leaf - test some objects
+                        // 叶子节点 - 测试一些对象
                         int n = tree[node + 1];
                         while (n > 0)
                         {
@@ -245,7 +267,7 @@ public:
                 {
                     if (axis > 2)
                     {
-                        return;    // should not happen
+                        return;    // 不应该发生
                     }
                     float tf = (intBitsToFloat(tree[node + offsetFront[axis]]) - org[axis]) * invDir[axis];
                     float tb = (intBitsToFloat(tree[node + offsetBack[axis]]) - org[axis]) * invDir[axis];
@@ -258,15 +280,15 @@ public:
                     }
                     continue;
                 }
-            } // traversal loop
+            } // 遍历循环
             do
             {
-                // stack is empty?
+                // 栈是否为空？
                 if (stackPos == 0)
                 {
                     return;
                 }
-                // move back up the stack
+                // 返回栈上层
                 stackPos--;
                 intervalMin = stack[stackPos].tnear;
                 if (maxDist < intervalMin)
@@ -280,6 +302,12 @@ public:
         }
     }
 
+    /**
+     * 点相交检测
+     * @tparam IsectCallback 回调函数类型
+     * @param p 点坐标
+     * @param intersectCallback 相交回调函数
+     */
     template<typename IsectCallback>
     void intersectPoint(const G3D::Vector3& p, IsectCallback& intersectCallback) const
     {
@@ -304,36 +332,36 @@ public:
                 {
                     if (axis < 3)
                     {
-                        // "normal" interior node
+                        // "正常" 内部节点
                         float tl = intBitsToFloat(tree[node + 1]);
                         float tr = intBitsToFloat(tree[node + 2]);
-                        // point is between clip zones
+                        // 点位于两个剪裁区域之间
                         if (tl < p[axis] && tr > p[axis])
                         {
                             break;
                         }
                         int right = offset + 3;
                         node = right;
-                        // point is in right node only
+                        // 点只在右节点中
                         if (tl < p[axis])
                         {
                             continue;
                         }
-                        node = offset; // left
-                        // point is in left node only
+                        node = offset; // 左节点
+                        // 点只在左节点中
                         if (tr > p[axis])
                         {
                             continue;
                         }
-                        // point is in both nodes
-                        // push back right node
+                        // 点在两个节点中
+                        // 压栈右节点
                         stack[stackPos].node = right;
                         stackPos++;
                         continue;
                     }
                     else
                     {
-                        // leaf - test some objects
+                        // 叶子节点 - 测试一些对象
                         int n = tree[node + 1];
                         while (n > 0)
                         {
@@ -344,11 +372,11 @@ public:
                         break;
                     }
                 }
-                else // BVH2 node (empty space cut off left and right)
+                else // BVH2 节点 (空空间剪裁)
                 {
                     if (axis > 2)
                     {
-                        return;    // should not happen
+                        return;    // 不应该发生
                     }
                     float tl = intBitsToFloat(tree[node + 1]);
                     float tr = intBitsToFloat(tree[node + 2]);
@@ -359,14 +387,14 @@ public:
                     }
                     continue;
                 }
-            } // traversal loop
+            } // 遍历循环
 
-            // stack is empty?
+            // 栈是否为空？
             if (stackPos == 0)
             {
                 return;
             }
-            // move back up the stack
+            // 返回栈上层
             stackPos--;
             node = stack[stackPos].node;
         }
@@ -380,6 +408,7 @@ protected:
     std::vector<uint32> objects;
     G3D::AABox bounds;
 
+    // 构建数据结构
     struct buildData
     {
         uint32* indices;
@@ -387,6 +416,8 @@ protected:
         uint32 numPrims;
         int maxPrims;
     };
+
+    // 栈节点结构
     struct StackNode
     {
         uint32 node;
@@ -394,6 +425,7 @@ protected:
         float tfar;
     };
 
+    // 构建统计信息类
     class BuildStats
     {
     private:
@@ -424,7 +456,7 @@ protected:
 
     void createNode(std::vector<uint32>& tempTree, int nodeIndex, uint32 left, uint32 right) const
     {
-        // write leaf node
+        // 写入叶子节点
         tempTree[nodeIndex + 0] = (3 << 30) | left; // cppcheck-suppress integerOverflow
         tempTree[nodeIndex + 1] = right - left + 1;
     }

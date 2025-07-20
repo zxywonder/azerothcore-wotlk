@@ -17,46 +17,54 @@
 
 #include "BoundingIntervalHierarchy.h"
 
+// 定义 isnan 宏，兼容 MSVC 和其他编译器
 #ifdef _MSC_VER
 #define isnan _isnan
 #else
 #define isnan std::isnan
 #endif
 
+// 构建 BIH 层次结构
 void BIH::buildHierarchy(std::vector<uint32>& tempTree, buildData& dat, BuildStats& stats)
 {
-    // create space for the first node
+    // 为第一个节点预留空间
     // cppcheck-suppress integerOverflow
     tempTree.push_back(uint32(3 << 30)); // dummy leaf
     tempTree.insert(tempTree.end(), 2, 0);
     //tempTree.add(0);
 
-    // seed bbox
+    // 初始化包围盒
     AABound gridBox = { bounds.low(), bounds.high() };
     AABound nodeBox = gridBox;
-    // seed subdivide function
+    // 递归分割函数
     subdivide(0, dat.numPrims - 1, tempTree, dat, gridBox, nodeBox, 0, 1, stats);
 }
 
+// 递归分割函数，构建 BIH 树
 void BIH::subdivide(int left, int right, std::vector<uint32>& tempTree, buildData& dat, AABound& gridBox, AABound& nodeBox, int nodeIndex, int depth, BuildStats& stats)
 {
+    // 如果当前节点包含的图元数量小于等于最大叶子节点图元数 或者 达到最大递归深度，则创建叶子节点
     if ((right - left + 1) <= dat.maxPrims || depth >= MAX_STACK_SIZE)
     {
-        // write leaf node
+        // 创建叶子节点
         stats.updateLeaf(depth, right - left + 1);
         createNode(tempTree, nodeIndex, left, right);
         return;
     }
-    // calculate extents
+
+    // 初始化分割参数
     int axis = -1, prevAxis, rightOrig;
     float clipL = G3D::fnan(), clipR = G3D::fnan(), prevClip = G3D::fnan();
     float split = G3D::fnan(), prevSplit;
     bool wasLeft = true;
+
+    // 开始分割循环
     while (true)
     {
         prevAxis = axis;
         prevSplit = split;
-        // perform quick consistency checks
+
+        // 执行一致性检查
         G3D::Vector3 d( gridBox.hi - gridBox.lo );
         if (d.x < 0 || d.y < 0 || d.z < 0)
         {
@@ -66,19 +74,22 @@ void BIH::subdivide(int left, int right, std::vector<uint32>& tempTree, buildDat
         {
             if (nodeBox.hi[i] < gridBox.lo[i] || nodeBox.lo[i] > gridBox.hi[i])
             {
-                //UI.printError(Module.ACCEL, "Reached tree area in error - discarding node with: %d objects", right - left + 1);
                 throw std::logic_error("invalid node overlap");
             }
         }
-        // find longest axis
+
+        // 找到最长轴进行分割
         axis = d.primaryAxis();
         split = 0.5f * (gridBox.lo[axis] + gridBox.hi[axis]);
-        // partition L/R subsets
+
+        // 分割左右子集
         clipL = -G3D::inf();
         clipR = G3D::inf();
-        rightOrig = right; // save this for later
+        rightOrig = right; // 保存原始右边界
         float nodeL = G3D::inf();
         float nodeR = -G3D::inf();
+
+        // 根据分割轴对图元进行左右分区
         for (int i = left; i <= right;)
         {
             int obj = dat.indices[i];
@@ -87,7 +98,6 @@ void BIH::subdivide(int left, int right, std::vector<uint32>& tempTree, buildDat
             float center = (minb + maxb) * 0.5f;
             if (center <= split)
             {
-                // stay left
                 i++;
                 if (clipL < maxb)
                 {
@@ -96,7 +106,6 @@ void BIH::subdivide(int left, int right, std::vector<uint32>& tempTree, buildDat
             }
             else
             {
-                // move to the right most
                 int t = dat.indices[i];
                 dat.indices[i] = dat.indices[right];
                 dat.indices[right] = t;
@@ -109,46 +118,46 @@ void BIH::subdivide(int left, int right, std::vector<uint32>& tempTree, buildDat
             nodeL = std::min(nodeL, minb);
             nodeR = std::max(nodeR, maxb);
         }
-        // check for empty space
+
+        // 检查空空间
         if (nodeL > nodeBox.lo[axis] && nodeR < nodeBox.hi[axis])
         {
             float nodeBoxW = nodeBox.hi[axis] - nodeBox.lo[axis];
             float nodeNewW = nodeR - nodeL;
-            // node box is too big compare to space occupied by primitives?
+            // 如果节点包围盒过大，创建 BVH2 节点
             if (1.3f * nodeNewW < nodeBoxW)
             {
                 stats.updateBVH2();
                 int nextIndex = tempTree.size();
-                // allocate child
+                // 分配子节点空间
                 tempTree.push_back(0);
                 tempTree.push_back(0);
                 tempTree.push_back(0);
-                // write bvh2 clip node
+                // 写入 BVH2 节点
                 stats.updateInner();
                 tempTree[nodeIndex + 0] = (axis << 30) | (1 << 29) | nextIndex;
                 tempTree[nodeIndex + 1] = floatToRawIntBits(nodeL);
                 tempTree[nodeIndex + 2] = floatToRawIntBits(nodeR);
-                // update nodebox and recurse
+                // 更新节点包围盒并递归
                 nodeBox.lo[axis] = nodeL;
                 nodeBox.hi[axis] = nodeR;
                 subdivide(left, rightOrig, tempTree, dat, gridBox, nodeBox, nextIndex, depth + 1, stats);
                 return;
             }
         }
-        // ensure we are making progress in the subdivision
+
+        // 确保分割有进展
         if (right == rightOrig)
         {
-            // all left
+            // 全部在左边
             if (prevAxis == axis && G3D::fuzzyEq(prevSplit, split))
             {
-                // we are stuck here - create a leaf
                 stats.updateLeaf(depth, right - left + 1);
                 createNode(tempTree, nodeIndex, left, right);
                 return;
             }
             if (clipL <= split)
             {
-                // keep looping on left half
                 gridBox.hi[axis] = split;
                 prevClip = clipL;
                 wasLeft = true;
@@ -159,18 +168,16 @@ void BIH::subdivide(int left, int right, std::vector<uint32>& tempTree, buildDat
         }
         else if (left > right)
         {
-            // all right
+            // 全部在右边
             right = rightOrig;
             if (prevAxis == axis && G3D::fuzzyEq(prevSplit, split))
             {
-                // we are stuck here - create a leaf
                 stats.updateLeaf(depth, right - left + 1);
                 createNode(tempTree, nodeIndex, left, right);
                 return;
             }
             if (clipR >= split)
             {
-                // keep looping on right half
                 gridBox.lo[axis] = split;
                 prevClip = clipR;
                 wasLeft = false;
@@ -181,20 +188,15 @@ void BIH::subdivide(int left, int right, std::vector<uint32>& tempTree, buildDat
         }
         else
         {
-            // we are actually splitting stuff
+            // 实际分割了数据
             if (prevAxis != -1 && !isnan(prevClip))
             {
-                // second time through - lets create the previous split
-                // since it produced empty space
                 int nextIndex = tempTree.size();
-                // allocate child node
                 tempTree.push_back(0);
                 tempTree.push_back(0);
                 tempTree.push_back(0);
                 if (wasLeft)
                 {
-                    // create a node with a left child
-                    // write leaf node
                     stats.updateInner();
                     tempTree[nodeIndex + 0] = (prevAxis << 30) | nextIndex;
                     tempTree[nodeIndex + 1] = floatToRawIntBits(prevClip);
@@ -202,27 +204,25 @@ void BIH::subdivide(int left, int right, std::vector<uint32>& tempTree, buildDat
                 }
                 else
                 {
-                    // create a node with a right child
-                    // write leaf node
                     stats.updateInner();
                     tempTree[nodeIndex + 0] = (prevAxis << 30) | (nextIndex - 3);
                     tempTree[nodeIndex + 1] = floatToRawIntBits(-G3D::inf());
                     tempTree[nodeIndex + 2] = floatToRawIntBits(prevClip);
                 }
-                // count stats for the unused leaf
                 depth++;
                 stats.updateLeaf(depth, 0);
-                // now we keep going as we are, with a new nodeIndex:
                 nodeIndex = nextIndex;
             }
             break;
         }
     }
-    // compute index of child nodes
+
+    // 计算子节点索引
     int nextIndex = tempTree.size();
-    // allocate left node
     int nl = right - left + 1;
     int nr = rightOrig - (right + 1) + 1;
+
+    // 分配左子节点空间
     if (nl > 0)
     {
         tempTree.push_back(0);
@@ -233,25 +233,29 @@ void BIH::subdivide(int left, int right, std::vector<uint32>& tempTree, buildDat
     {
         nextIndex -= 3;
     }
-    // allocate right node
+
+    // 分配右子节点空间
     if (nr > 0)
     {
         tempTree.push_back(0);
         tempTree.push_back(0);
         tempTree.push_back(0);
     }
-    // write leaf node
+
+    // 写入内部节点
     stats.updateInner();
     tempTree[nodeIndex + 0] = (axis << 30) | nextIndex;
     tempTree[nodeIndex + 1] = floatToRawIntBits(clipL);
     tempTree[nodeIndex + 2] = floatToRawIntBits(clipR);
-    // prepare L/R child boxes
+
+    // 准备左右子节点包围盒
     AABound gridBoxL(gridBox), gridBoxR(gridBox);
     AABound nodeBoxL(nodeBox), nodeBoxR(nodeBox);
     gridBoxL.hi[axis] = gridBoxR.lo[axis] = split;
     nodeBoxL.hi[axis] = clipL;
     nodeBoxR.lo[axis] = clipR;
-    // recurse
+
+    // 递归处理左右子节点
     if (nl > 0)
     {
         subdivide(left, right, tempTree, dat, gridBoxL, nodeBoxL, nextIndex, depth + 1, stats);
@@ -270,6 +274,7 @@ void BIH::subdivide(int left, int right, std::vector<uint32>& tempTree, buildDat
     }
 }
 
+// 将 BIH 数据写入文件
 bool BIH::writeToFile(FILE* wf) const
 {
     uint32 treeSize = tree.size();
@@ -284,6 +289,7 @@ bool BIH::writeToFile(FILE* wf) const
     return check == (3 + 3 + 2 + treeSize + count);
 }
 
+// 从文件读取 BIH 数据
 bool BIH::readFromFile(FILE* rf)
 {
     uint32 treeSize;
@@ -296,11 +302,12 @@ bool BIH::readFromFile(FILE* rf)
     tree.resize(treeSize);
     check += fread(&tree[0], sizeof(uint32), treeSize, rf);
     check += fread(&count, sizeof(uint32), 1, rf);
-    objects.resize(count); // = new uint32[nObjects];
+    objects.resize(count);
     check += fread(&objects[0], sizeof(uint32), count, rf);
     return uint64(check) == uint64(3 + 3 + 1 + 1 + uint64(treeSize) + uint64(count));
 }
 
+// 更新叶子节点统计信息
 void BIH::BuildStats::updateLeaf(int depth, int n)
 {
     numLeaves++;
@@ -314,6 +321,7 @@ void BIH::BuildStats::updateLeaf(int depth, int n)
     ++numLeavesN[nl];
 }
 
+// 打印构建统计信息
 void BIH::BuildStats::printStats()
 {
     printf("Tree stats:\n");

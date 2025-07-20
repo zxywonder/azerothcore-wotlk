@@ -1,4 +1,4 @@
-/*
+﻿/*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -29,14 +29,18 @@ The collision detection is modified to return true, if we are inside an object.
 
 namespace VMAP
 {
+    // IntersectionCallBack 是一个模板类，用于处理射线与实体的交集检测回调
+    // TValue 是实体类型
     template<class TValue>
     class IntersectionCallBack
     {
     public:
-        TValue*      closestEntity;
-        G3D::Vector3 hitLocation;
-        G3D::Vector3 hitNormal;
+        TValue*      closestEntity;  // 最近的碰撞实体
+        G3D::Vector3 hitLocation;    // 碰撞发生的位置
+        G3D::Vector3 hitNormal;      // 碰撞点的法线方向
 
+        // 重载运算符，用于执行交集检测
+        // ray: 输入射线，entity: 被检测的实体，StopAtFirstHit: 是否在第一次碰撞时停止，distance: 射线距离
         void operator()(const G3D::Ray& ray, const TValue* entity, bool StopAtFirstHit, float& distance)
         {
             entity->intersect(ray, distance, StopAtFirstHit, hitLocation, hitNormal);
@@ -47,9 +51,13 @@ namespace VMAP
     //==============================================================
     //==============================================================
 
+    // MyCollisionDetection 类提供自定义的碰撞检测功能
     class MyCollisionDetection
     {
     public:
+        // 检测从某一点沿固定方向移动时是否与轴对齐包围盒（AABox）发生碰撞
+        // origin: 起始点，dir: 移动方向，box: 被检测的包围盒
+        // location: 输出的碰撞位置，Inside: 是否起点就在包围盒内部
         static bool collisionLocationForMovingPointFixedAABox(
             const G3D::Vector3&     origin,
             const G3D::Vector3&     dir,
@@ -61,19 +69,19 @@ namespace VMAP
 #define IR(x)   (reinterpret_cast<G3D::uint32 const&>(x))
 
             Inside = true;
-            const G3D::Vector3& MinB = box.low();
-            const G3D::Vector3& MaxB = box.high();
-            G3D::Vector3 MaxT(-1.0f, -1.0f, -1.0f);
+            const G3D::Vector3& MinB = box.low();   // 包围盒最小坐标点
+            const G3D::Vector3& MaxB = box.high();  // 包围盒最大坐标点
+            G3D::Vector3 MaxT(-1.0f, -1.0f, -1.0f); // 用于存储各轴方向的碰撞时间
 
-            // Find candidate planes.
+            // 查找候选的碰撞平面
             for (int i = 0; i < 3; ++i)
             {
                 if (origin[i] < MinB[i])
                 {
-                    location[i] = MinB[i];
-                    Inside      = false;
+                    location[i] = MinB[i];  // 设置为包围盒边界
+                    Inside      = false;    // 起点不在包围盒内部
 
-                    // Calculate T distances to candidate planes
+                    // 计算到候选平面的距离
                     if (IR(dir[i]))
                     {
                         MaxT[i] = (MinB[i] - origin[i]) / dir[i];
@@ -81,10 +89,10 @@ namespace VMAP
                 }
                 else if (origin[i] > MaxB[i])
                 {
-                    location[i] = MaxB[i];
-                    Inside      = false;
+                    location[i] = MaxB[i];  // 设置为包围盒边界
+                    Inside      = false;    // 起点不在包围盒内部
 
-                    // Calculate T distances to candidate planes
+                    // 计算到候选平面的距离
                     if (IR(dir[i]))
                     {
                         MaxT[i] = (MaxB[i] - origin[i]) / dir[i];
@@ -92,14 +100,14 @@ namespace VMAP
                 }
             }
 
+            // 如果起点在包围盒内部，则一定发生碰撞
             if (Inside)
             {
-                // definite hit
                 location = origin;
                 return true;
             }
 
-            // Get largest of the maxT's for final choice of intersection
+            // 找出最大的 MaxT 值，确定最终的碰撞平面
             int WhichPlane = 0;
             if (MaxT[1] > MaxT[WhichPlane])
             {
@@ -111,13 +119,14 @@ namespace VMAP
                 WhichPlane = 2;
             }
 
-            // Check final candidate actually inside box
+            // 检查最终的候选平面是否有效
             if (IR(MaxT[WhichPlane]) & 0x80000000)
             {
-                // Miss the box
+                // 碰撞时间无效，未命中包围盒
                 return false;
             }
 
+            // 检查碰撞点是否在包围盒范围内
             for (int i = 0; i < 3; ++i)
             {
                 if (i != WhichPlane)
@@ -126,8 +135,7 @@ namespace VMAP
                     if ((location[i] < MinB[i]) ||
                             (location[i] > MaxB[i]))
                     {
-                        // On this plane we're outside the box extents, so
-                        // we miss the box
+                        // 碰撞点在此平面上超出包围盒范围，未命中
                         return false;
                     }
                 }

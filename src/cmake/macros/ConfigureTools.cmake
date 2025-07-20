@@ -10,8 +10,8 @@
 # implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 #
 
-set(BUILD_TOOLS_MAPS 0)
-set(BUILD_TOOLS_DB_IMPORT 0)
+set(BUILD_TOOLS_MAPS 1)
+set(BUILD_TOOLS_DB_IMPORT 1)
 
 # Returns the base path to the tools directory in the source directory
 function(GetToolsBasePath variable)

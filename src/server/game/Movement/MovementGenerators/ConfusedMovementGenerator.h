@@ -15,30 +15,30 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef ACORE_CONFUSEDGENERATOR_H
-#define ACORE_CONFUSEDGENERATOR_H
-
-#include "MovementGenerator.h"
-#include "Timer.h"
-
-#define MAX_CONF_WAYPOINTS 24 //! Allows a twelve second confusion if i_nextMove always is the absolute minimum timer.
-
-template<class T>
-class ConfusedMovementGenerator : public MovementGeneratorMedium< T, ConfusedMovementGenerator<T> >
-{
-public:
-    explicit ConfusedMovementGenerator() : i_nextMoveTime(1) {}
-
-    void DoInitialize(T*);
-    void DoFinalize(T*);
-    void DoReset(T*);
-    bool DoUpdate(T*, uint32);
-
-    MovementGeneratorType GetMovementGeneratorType() { return CONFUSED_MOTION_TYPE; }
-private:
-    void _InitSpecific(T*, bool&, bool&);
-    TimeTracker i_nextMoveTime;
-    float i_waypoints[MAX_CONF_WAYPOINTS + 1][3];
-    uint32 i_nextMove;
-};
-#endif
+ #ifndef ACORE_CONFUSEDGENERATOR_H
+ #define ACORE_CONFUSEDGENERATOR_H
+ 
+ #include "MovementGenerator.h"
+ #include "Timer.h"
+ 
+ #define MAX_CONF_WAYPOINTS 24 //! 允许在i_nextMove始终为最小定时器的情况下产生12秒的混乱移动
+ 
+ template<class T>
+ class ConfusedMovementGenerator : public MovementGeneratorMedium< T, ConfusedMovementGenerator<T> >
+ {
+ public:
+     explicit ConfusedMovementGenerator() : i_nextMoveTime(1) {} // 构造函数，初始化下一次移动时间
+ 
+     void DoInitialize(T*);    // 初始化混乱移动生成器
+     void DoFinalize(T*);      // 完成或清理混乱移动状态
+     void DoReset(T*);         // 重置移动生成器
+     bool DoUpdate(T*, uint32); // 更新移动状态，执行混乱移动逻辑
+ 
+     MovementGeneratorType GetMovementGeneratorType() { return CONFUSED_MOTION_TYPE; } // 返回运动生成器类型为混乱类型
+ private:
+     void _InitSpecific(T*, bool&, bool&); // 特定初始化逻辑，可能用于不同派生类的定制实现
+     TimeTracker i_nextMoveTime;          // 跟踪下一次移动的时间
+     float i_waypoints[MAX_CONF_WAYPOINTS + 1][3]; // 存储混乱移动路径点坐标（x, y, z）
+     uint32 i_nextMove;                    // 下一步移动的索引
+ };
+ #endif

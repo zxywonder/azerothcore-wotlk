@@ -1,20 +1,3 @@
-/*
- * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
- *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
- *
- * This program is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
- * more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program. If not, see <http://www.gnu.org/licenses/>.
- */
-
 #ifndef AC_MOVESPLINEFLAG_H
 #define AC_MOVESPLINEFLAG_H
 
@@ -29,53 +12,59 @@ namespace Movement
 #pragma pack(push, 1)
 #endif
 
+    /**
+     * MoveSplineFlag 类
+     * 用于描述移动样条的标志位
+     */
     class MoveSplineFlag
     {
     public:
+        /**
+         * 枚举 eFlags
+         * 定义各种移动标志
+         */
         enum eFlags
         {
             None                = 0x00000000,
             // x00-xFF(first byte) used as animation Ids storage in pair with Animation flag
-            Done                = 0x00000100,
-            Falling             = 0x00000200,           // Affects elevation computation, can't be combined with Parabolic flag
+            Done                = 0x00000100,           // 标记移动完成
+            Falling             = 0x00000200,           // 影响高度计算，不能与 Parabolic 标志组合使用
             No_Spline           = 0x00000400,
-            Parabolic           = 0x00000800,           // Affects elevation computation, can't be combined with Falling flag
-            Walkmode            = 0x00001000,
-            Flying              = 0x00002000,           // Smooth movement(Catmullrom interpolation mode), flying animation
-            OrientationFixed    = 0x00004000,           // Model orientation fixed
-            Final_Point         = 0x00008000,
-            Final_Target        = 0x00010000,
-            Final_Angle         = 0x00020000,
-            Catmullrom          = 0x00040000,           // Used Catmullrom interpolation mode
-            Cyclic              = 0x00080000,           // Movement by cycled spline
-            Enter_Cycle         = 0x00100000,           // Everytimes appears with cyclic flag in monster move packet, erases first spline vertex after first cycle done
-            Animation           = 0x00200000,           // Plays animation after some time passed
-            Frozen              = 0x00400000,           // Will never arrive
-            TransportEnter      = 0x00800000,
-            TransportExit       = 0x01000000,
+            Parabolic           = 0x00000800,           // 影响高度计算，不能与 Falling 标志组合使用
+            Walkmode            = 0x00001000,           // 步行模式
+            Flying              = 0x00002000,           // 平滑移动（Catmullrom 插值模式），飞行动画
+            OrientationFixed    = 0x00004000,           // 模型方向固定
+            Final_Point         = 0x00008000,           // 最终点方向
+            Final_Target        = 0x00010000,           // 最终目标方向
+            Final_Angle         = 0x00020000,           // 最终角度方向
+            Catmullrom          = 0x00040000,           // 使用 Catmullrom 插值模式
+            Cyclic              = 0x00080000,           // 循环路径移动
+            Enter_Cycle         = 0x00100000,           // 通常与 cyclic 标志一起出现，第一次循环完成后删除第一个路径点
+            Animation           = 0x00200000,           // 在一段时间后播放动画
+            Frozen              = 0x00400000,           // 永远不会到达
+            TransportEnter      = 0x00800000,           // 进入载具
+            TransportExit       = 0x01000000,           // 离开载具
             Unknown7            = 0x02000000,
             Unknown8            = 0x04000000,
-            OrientationInversed = 0x08000000,
+            OrientationInversed = 0x08000000,           // 方向反转
             Unknown10           = 0x10000000,
             Unknown11           = 0x20000000,
             Unknown12           = 0x40000000,
             Unknown13           = 0x80000000,
 
-            // Masks
-            Mask_Final_Facing   = Final_Point | Final_Target | Final_Angle,
-            // animation ids stored here, see AnimType enum, used with Animation flag
-            Mask_Animations     = 0xFF,
-            // flags that shouldn't be appended into SMSG_MONSTER_MOVE\SMSG_MONSTER_MOVE_TRANSPORT packet, should be more probably
-            Mask_No_Monster_Move = Mask_Final_Facing | Mask_Animations | Done,
-            // CatmullRom interpolation mode used
-            Mask_CatmullRom     = Flying | Catmullrom,
-            // Unused, not suported flags
-            Mask_Unused         = No_Spline | Enter_Cycle | Frozen | Unknown7 | Unknown8 | Unknown10 | Unknown11 | Unknown12 | Unknown13
+            // 掩码
+            Mask_Final_Facing   = Final_Point | Final_Target | Final_Angle,  // 最终朝向相关标志
+            Mask_Animations     = 0xFF,                 // 存储动画ID，与 Animation 标志一起使用
+            Mask_No_Monster_Move = Mask_Final_Facing | Mask_Animations | Done, // 不应包含在 SMSG_MONSTER_MOVE 数据包中的标志
+            Mask_CatmullRom     = Flying | Catmullrom,  // 使用 CatmullRom 插值模式
+            Mask_Unused         = No_Spline | Enter_Cycle | Frozen | Unknown7 | Unknown8 | Unknown10 | Unknown11 | Unknown12 | Unknown13 // 未使用或不支持的标志
         };
 
+        // 原始数据访问
         inline uint32& raw() { return (uint32&) * this; }
         [[nodiscard]] inline const uint32& raw() const { return (const uint32&) * this; }
 
+        // 构造函数
         MoveSplineFlag() { raw() = 0; }
         MoveSplineFlag(uint32 f) { raw() = f; }
         MoveSplineFlag(const MoveSplineFlag& f) { raw() = f.raw(); }
@@ -83,60 +72,61 @@ namespace Movement
         MoveSplineFlag& operator=(const MoveSplineFlag&) = default;
         MoveSplineFlag& operator=(MoveSplineFlag&&) = default;
 
-        // Constant interface
+        // 常量接口
 
-        [[nodiscard]] bool isSmooth() const { return raw() & Mask_CatmullRom; }
-        [[nodiscard]] bool isLinear() const { return !isSmooth(); }
-        [[nodiscard]] bool isFacing() const { return raw() & Mask_Final_Facing; }
+        [[nodiscard]] bool isSmooth() const { return raw() & Mask_CatmullRom; }      // 是否使用平滑插值
+        [[nodiscard]] bool isLinear() const { return !isSmooth(); }                  // 是否使用线性插值
+        [[nodiscard]] bool isFacing() const { return raw() & Mask_Final_Facing; }    // 是否设置最终朝向
 
-        [[nodiscard]] uint8 getAnimationId() const { return animId; }
-        [[nodiscard]] bool hasAllFlags(uint32 f) const { return (raw() & f) == f; }
-        [[nodiscard]] bool hasFlag(uint32 f) const { return (raw() & f) != 0; }
-        uint32 operator & (uint32 f) const { return (raw() & f); }
-        uint32 operator | (uint32 f) const { return (raw() | f); }
-        [[nodiscard]] std::string ToString() const;
+        [[nodiscard]] uint8 getAnimationId() const { return animId; }                // 获取动画ID
+        [[nodiscard]] bool hasAllFlags(uint32 f) const { return (raw() & f) == f; }  // 是否包含所有指定标志
+        [[nodiscard]] bool hasFlag(uint32 f) const { return (raw() & f) != 0; }      // 是否包含指定标志
+        uint32 operator & (uint32 f) const { return (raw() & f); }                   // 按位与操作
+        uint32 operator | (uint32 f) const { return (raw() | f); }                   // 按位或操作
+        [[nodiscard]] std::string ToString() const;                                  // 转换为字符串表示
 
-        // Not constant interface
+        // 非常量接口
 
-        void operator &= (uint32 f) { raw() &= f; }
-        void operator |= (uint32 f) { raw() |= f; }
+        void operator &= (uint32 f) { raw() &= f; }      // 按位与赋值
+        void operator |= (uint32 f) { raw() |= f; }      // 按位或赋值
 
-        void EnableAnimation(uint8 anim) { raw() = (raw() & ~(Mask_Animations | Falling | Parabolic)) | Animation | anim; }
-        void EnableParabolic() { raw() = (raw() & ~(Mask_Animations | Falling | Animation)) | Parabolic; }
-        void EnableFalling() { raw() = (raw() & ~(Mask_Animations | Parabolic | Flying | Animation)) | Falling; }
-        void EnableFlying() { raw() = (raw() & ~(Falling | Catmullrom)) | Flying; }
-        void EnableCatmullRom() { raw() = (raw() & ~Flying) | Catmullrom; }
-        void EnableFacingPoint() { raw() = (raw() & ~Mask_Final_Facing) | Final_Point; }
-        void EnableFacingAngle() { raw() = (raw() & ~Mask_Final_Facing) | Final_Angle; }
-        void EnableFacingTarget() { raw() = (raw() & ~Mask_Final_Facing) | Final_Target; }
-        void EnableTransportEnter() { raw() = (raw() & ~TransportExit) | TransportEnter; }
-        void EnableTransportExit() { raw() = (raw() & ~TransportEnter) | TransportExit; }
+        void EnableAnimation(uint8 anim) { raw() = (raw() & ~(Mask_Animations | Falling | Parabolic)) | Animation | anim; } // 启用动画
+        void EnableParabolic() { raw() = (raw() & ~(Mask_Animations | Falling | Animation)) | Parabolic; } // 启用抛物线运动
+        void EnableFalling() { raw() = (raw() & ~(Mask_Animations | Parabolic | Animation)) | Falling; } // 启用下落运动
+        void EnableFlying() { raw() = (raw() & ~(Falling | Catmullrom)) | Flying; } // 启用飞行模式
+        void EnableCatmullRom() { raw() = (raw() & ~Flying) | Catmullrom; } // 启用 CatmullRom 插值
+        void EnableFacingPoint() { raw() = (raw() & ~Mask_Final_Facing) | Final_Point; } // 启用面向点
+        void EnableFacingAngle() { raw() = (raw() & ~Mask_Final_Facing) | Final_Angle; } // 启用面向角度
+        void EnableFacingTarget() { raw() = (raw() & ~Mask_Final_Facing) | Final_Target; } // 启用面向目标
+        void EnableTransportEnter() { raw() = (raw() & ~TransportExit) | TransportEnter; } // 启用进入载具
+        void EnableTransportExit() { raw() = (raw() & ~TransportEnter) | TransportExit; } // 启用离开载具
 
-        uint8 animId              : 8;
-        bool done                : 1;
-        bool falling             : 1;
-        bool no_spline           : 1;
-        bool parabolic           : 1;
-        bool walkmode            : 1;
-        bool flying              : 1;
-        bool orientationFixed    : 1;
-        bool final_point         : 1;
-        bool final_target        : 1;
-        bool final_angle         : 1;
-        bool catmullrom          : 1;
-        bool cyclic              : 1;
-        bool enter_cycle         : 1;
-        bool animation           : 1;
-        bool frozen              : 1;
-        bool transportEnter      : 1;
-        bool transportExit       : 1;
-        bool unknown7            : 1;
-        bool unknown8            : 1;
-        bool orientationInversed : 1;
-        bool unknown10           : 1;
-        bool unknown11           : 1;
-        bool unknown12           : 1;
-        bool unknown13           : 1;
+        // 位域成员
+        uint8 animId              : 8;                    // 动画ID
+        bool done                : 1;                    // 是否完成
+        bool falling             : 1;                    // 是否下落
+        bool no_spline           : 1;                    // 是否不使用样条
+        bool parabolic           : 1;                    // 是否抛物线运动
+        bool walkmode            : 1;                    // 是否步行模式
+        bool flying              : 1;                    // 是否飞行
+        bool orientationFixed    : 1;                    // 方向是否固定
+        bool final_point         : 1;                    // 最终点方向
+        bool final_target        : 1;                    // 最终目标方向
+        bool final_angle         : 1;                    // 最终角度方向
+        bool catmullrom          : 1;                    // 是否使用 Catmullrom 插值
+        bool cyclic              : 1;                    // 是否循环路径
+        bool enter_cycle         : 1;                    // 是否进入循环
+        bool animation           : 1;                    // 是否播放动画
+        bool frozen              : 1;                    // 是否冻结
+        bool transportEnter      : 1;                    // 是否进入载具
+        bool transportExit       : 1;                    // 是否离开载具
+        bool unknown7            : 1;                    // 未知标志7
+        bool unknown8            : 1;                    // 未知标志8
+        bool orientationInversed : 1;                    // 方向是否反转
+        bool unknown10           : 1;                    // 未知标志10
+        bool unknown11           : 1;                    // 未知标志11
+        bool unknown12           : 1;                    // 未知标志12
+        bool unknown13           : 1;                    // 未知标志13
     };
 #if defined( __GNUC__ )
 #pragma pack()

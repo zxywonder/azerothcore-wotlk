@@ -18,27 +18,33 @@
 #ifndef _IMMAPMANAGER_H
 #define _IMMAPMANAGER_H
 
-// Interface for IMMapManger
+// IMMapManger 接口
 namespace MMAP
 {
+    // MMAP 加载结果枚举
     enum MMAP_LOAD_RESULT
     {
-        MMAP_LOAD_RESULT_ERROR,
-        MMAP_LOAD_RESULT_OK,
-        MMAP_LOAD_RESULT_IGNORED,
+        MMAP_LOAD_RESULT_ERROR,  // 加载出错
+        MMAP_LOAD_RESULT_OK,     // 加载成功
+        MMAP_LOAD_RESULT_IGNORED // 加载被忽略
     };
 
+    // IMMapMgr 类定义
     class IMMapMgr
     {
     private:
+        // 是否启用寻路功能的标志
         bool iEnablePathFinding;
 
     public:
+        // 构造函数，默认启用寻路功能
         IMMapMgr() : iEnablePathFinding(true) {}
+        // 虚析构函数
         virtual ~IMMapMgr(void) {}
 
-        //Enabled/Disabled Pathfinding
+        // 设置是否启用寻路功能
         void setEnablePathFinding(bool value) { iEnablePathFinding = value; }
+        // 获取是否启用寻路功能
         bool isEnablePathFinding() const { return (iEnablePathFinding); }
     };
 }

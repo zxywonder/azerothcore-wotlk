@@ -31,10 +31,13 @@ using G3D::Vector3;
 
 namespace VMAP
 {
+    // 地图射线回调类，用于处理射线与模型的相交检测
     class MapRayCallback
     {
     public:
+        // 构造函数，初始化模型实例指针、忽略标志和命中标志
         MapRayCallback(ModelInstance* val, ModelIgnoreFlags ignoreFlags): prims(val), flags(ignoreFlags), hit(false) { }
+        // 重载括号运算符，执行射线与模型的相交检测
         bool operator()(const G3D::Ray& ray, uint32 entry, float& distance, bool StopAtFirstHit)
         {
             bool result = prims[entry].intersectRay(ray, distance, StopAtFirstHit, flags);
@@ -44,17 +47,21 @@ namespace VMAP
             }
             return result;
         }
+        // 获取是否命中的结果
         bool didHit() { return hit; }
     protected:
-        ModelInstance* prims;
-        ModelIgnoreFlags flags;
-        bool hit;
+        ModelInstance* prims;  // 模型实例指针
+        ModelIgnoreFlags flags;  // 模型忽略标志
+        bool hit;  // 是否命中的标志
     };
 
+    // 区域信息回调类，用于获取指定点的区域信息
     class AreaInfoCallback
     {
     public:
+        // 构造函数，初始化模型实例指针
         AreaInfoCallback(ModelInstance* val): prims(val) {}
+        // 重载括号运算符，执行点与模型的相交检测以获取区域信息
         void operator()(const Vector3& point, uint32 entry)
         {
 #if defined(VMAP_DEBUG)
@@ -63,14 +70,17 @@ namespace VMAP
             prims[entry].intersectPoint(point, aInfo);
         }
 
-        ModelInstance* prims;
-        AreaInfo aInfo;
+        ModelInstance* prims;  // 模型实例指针
+        AreaInfo aInfo;  // 区域信息
     };
 
+    // 位置信息回调类，用于获取指定点的位置信息
     class LocationInfoCallback
     {
     public:
+        // 构造函数，初始化模型实例指针和位置信息引用
         LocationInfoCallback(ModelInstance* val, LocationInfo& info): prims(val), locInfo(info), result(false) {}
+        // 重载括号运算符，执行点与模型的相交检测以获取位置信息
         void operator()(const Vector3& point, uint32 entry)
         {
 #if defined(VMAP_DEBUG)
@@ -82,13 +92,14 @@ namespace VMAP
             }
         }
 
-        ModelInstance* prims;
-        LocationInfo& locInfo;
-        bool result;
+        ModelInstance* prims;  // 模型实例指针
+        LocationInfo& locInfo;  // 位置信息引用
+        bool result;  // 是否获取到位置信息的标志
     };
 
     //=========================================================
 
+    // 获取地图瓦片文件名
     std::string StaticMapTree::getTileFileName(uint32 mapID, uint32 tileX, uint32 tileY)
     {
         std::stringstream tilefilename;
@@ -99,6 +110,7 @@ namespace VMAP
         return tilefilename.str();
     }
 
+    // 获取指定位置的区域信息
     bool StaticMapTree::GetAreaInfo(Vector3& pos, uint32& flags, int32& adtId, int32& rootId, int32& groupId) const
     {
         AreaInfoCallback intersectionCallBack(iTreeValues);
@@ -115,6 +127,7 @@ namespace VMAP
         return false;
     }
 
+    // 获取指定位置的位置信息
     bool StaticMapTree::GetLocationInfo(const Vector3& pos, LocationInfo& info) const
     {
         LocationInfoCallback intersectionCallBack(iTreeValues, info);
@@ -122,6 +135,7 @@ namespace VMAP
         return intersectionCallBack.result;
     }
 
+    // 静态地图树构造函数，初始化地图ID、是否分块标志、树值指针和基础路径
     StaticMapTree::StaticMapTree(uint32 mapID, const std::string& basePath)
         : iMapID(mapID), iIsTiled(false), iTreeValues(0), iBasePath(basePath)
     {
@@ -133,6 +147,7 @@ namespace VMAP
 
     //=========================================================
     //! Make sure to call unloadMap() to unregister acquired model references before destroying
+    // 静态地图树析构函数，释放树值内存
     StaticMapTree::~StaticMapTree()
     {
         delete[] iTreeValues;
@@ -143,7 +158,7 @@ namespace VMAP
     If intersection is found within pMaxDist, sets pMaxDist to intersection distance and returns true.
     Else, pMaxDist is not modified and returns false;
     */
-
+    // 获取射线与地图的相交时间（距离）
     bool StaticMapTree::GetIntersectionTime(const G3D::Ray& pRay, float& pMaxDist, bool StopAtFirstHit, ModelIgnoreFlags ignoreFlags) const
     {
         float distance = pMaxDist;
@@ -157,23 +172,24 @@ namespace VMAP
     }
     //=========================================================
 
+    // 判断两点之间是否有视线阻挡
     bool StaticMapTree::isInLineOfSight(const Vector3& pos1, const Vector3& pos2, ModelIgnoreFlags ignoreFlags) const
     {
         float maxDist = (pos2 - pos1).magnitude();
-        // return false if distance is over max float, in case of cheater teleporting to the end of the universe
+        // 如果距离达到浮点数最大值，可能是作弊者传送到很远的地方，返回false
         if (maxDist == std::numeric_limits<float>::max() || !std::isfinite(maxDist))
         {
             return false;
         }
 
-        // valid map coords should *never ever* produce float overflow, but this would produce NaNs too
+        // 有效的地图坐标绝不应该产生浮点数溢出，但这也会产生NaN值
         ASSERT(maxDist < std::numeric_limits<float>::max());
-        // prevent NaN values which can cause BIH intersection to enter infinite loop
+        // 防止NaN值导致BIH相交检测进入无限循环
         if (maxDist < 1e-10f)
         {
             return true;
         }
-        // direction with length of 1
+        // 单位方向向量
         G3D::Ray ray = G3D::Ray::fromOriginAndDirection(pos1, (pos2 - pos1) / maxDist);
 
         return !GetIntersectionTime(ray, maxDist, true, ignoreFlags);
@@ -183,20 +199,20 @@ namespace VMAP
     When moving from pos1 to pos2 check if we hit an object. Return true and the position if we hit one
     Return the hit pos or the original dest pos
     */
-
+    // 获取从起点移动到终点过程中是否命中物体以及命中位置
     bool StaticMapTree::GetObjectHitPos(const Vector3& pPos1, const Vector3& pPos2, Vector3& pResultHitPos, float pModifyDist) const
     {
         bool result = false;
         float maxDist = (pPos2 - pPos1).magnitude();
-        // valid map coords should *never ever* produce float overflow, but this would produce NaNs too
+        // 有效的地图坐标绝不应该产生浮点数溢出，但这也会产生NaN值
         ASSERT(maxDist < std::numeric_limits<float>::max());
-        // prevent NaN values which can cause BIH intersection to enter infinite loop
+        // 防止NaN值导致BIH相交检测进入无限循环
         if (maxDist < 1e-10f)
         {
             pResultHitPos = pPos2;
             return false;
         }
-        Vector3 dir = (pPos2 - pPos1) / maxDist;            // direction with length of 1
+        Vector3 dir = (pPos2 - pPos1) / maxDist;            // 单位方向向量
         G3D::Ray ray(pPos1, dir);
         float dist = maxDist;
         if (GetIntersectionTime(ray, dist, false, ModelIgnoreFlags::Nothing))
@@ -229,11 +245,12 @@ namespace VMAP
 
     //=========================================================
 
+    // 获取指定位置的高度
     float StaticMapTree::getHeight(const Vector3& pPos, float maxSearchDist) const
     {
         float height = G3D::finf();
         Vector3 dir = Vector3(0, 0, -1);
-        G3D::Ray ray(pPos, dir);   // direction with length of 1
+        G3D::Ray ray(pPos, dir);   // 单位方向向量
         float maxDist = maxSearchDist;
         if (GetIntersectionTime(ray, maxDist, false, ModelIgnoreFlags::Nothing))
         {
@@ -244,6 +261,7 @@ namespace VMAP
 
     //=========================================================
 
+    // 检查是否可以加载指定地图和瓦片
     LoadResult StaticMapTree::CanLoadMap(const std::string& vmapPath, uint32 mapID, uint32 tileX, uint32 tileY)
     {
         std::string basePath = vmapPath;
@@ -291,6 +309,7 @@ namespace VMAP
 
     //=========================================================
 
+    // 初始化地图
     bool StaticMapTree::InitMap(const std::string& fname, VMapMgr2* vm)
     {
         //VMAP_DEBUG_LOG(LOG_FILTER_MAPS, "StaticMapTree::InitMap() : initializing StaticMapTree '{}'", fname);
@@ -315,8 +334,8 @@ namespace VMAP
 
         iIsTiled = bool(tiled);
 
-        // global model spawns
-        // only non-tiled maps have them, and if so exactly one (so far at least...)
+        // 全局模型生成
+        // 只有非分块地图才有，且目前至少只有一个
         ModelSpawn spawn;
 #ifdef VMAP_DEBUG
         //LOG_DEBUG(LOG_FILTER_MAPS, "StaticMapTree::InitMap() : map isTiled: {}", static_cast<uint32>(iIsTiled));
@@ -327,7 +346,7 @@ namespace VMAP
             //VMAP_DEBUG_LOG(LOG_FILTER_MAPS, "StaticMapTree::InitMap() : loading {}", spawn.name);
             if (model)
             {
-                // assume that global model always is the first and only tree value (could be improved...)
+                // 假设全局模型总是第一个且唯一的树值（可以改进）
                 iTreeValues[0] = ModelInstance(spawn, model);
                 iLoadedSpawns[0] = 1;
             }
@@ -344,6 +363,7 @@ namespace VMAP
 
     //=========================================================
 
+    // 卸载地图
     void StaticMapTree::UnloadMap(VMapMgr2* vm)
     {
         for (loadedSpawnMap::iterator i = iLoadedSpawns.begin(); i != iLoadedSpawns.end(); ++i)
@@ -360,12 +380,13 @@ namespace VMAP
 
     //=========================================================
 
+    // 加载地图瓦片
     bool StaticMapTree::LoadMapTile(uint32 tileX, uint32 tileY, VMapMgr2* vm)
     {
         if (!iIsTiled)
         {
-            // currently, core creates grids for all maps, whether it has terrain tiles or not
-            // so we need "fake" tile loads to know when we can unload map geometry
+            // 目前，核心为所有地图创建网格，无论是否有地形瓦片
+            // 所以我们需要“假”的瓦片加载来知道何时可以卸载地图几何
             iLoadedTiles[packTileID(tileX, tileY)] = false;
             return true;
         }
@@ -393,19 +414,19 @@ namespace VMAP
             }
             for (uint32 i = 0; i < numSpawns && result; ++i)
             {
-                // read model spawns
+                // 读取模型生成信息
                 ModelSpawn spawn;
                 result = ModelSpawn::readFromFile(tf, spawn);
                 if (result)
                 {
-                    // acquire model instance
+                    // 获取模型实例
                     WorldModel* model = vm->acquireModelInstance(iBasePath, spawn.name, spawn.flags);
                     if (!model)
                     {
                         LOG_ERROR("maps", "StaticMapTree::LoadMapTile() : could not acquire WorldModel pointer [{}, {}]", tileX, tileY);
                     }
 
-                    // update tree
+                    // 更新树
                     uint32 referencedVal;
 
                     if (fread(&referencedVal, sizeof(uint32), 1, tf) == 1)
@@ -459,6 +480,7 @@ namespace VMAP
 
     //=========================================================
 
+    // 卸载地图瓦片
     void StaticMapTree::UnloadMapTile(uint32 tileX, uint32 tileY, VMapMgr2* vm)
     {
         uint32 tileID = packTileID(tileX, tileY);
@@ -468,7 +490,7 @@ namespace VMAP
             LOG_ERROR("maps", "StaticMapTree::UnloadMapTile() : trying to unload non-loaded tile - Map:{} X:{} Y:{}", iMapID, tileX, tileY);
             return;
         }
-        if (tile->second) // file associated with tile
+        if (tile->second) // 有与瓦片关联的文件
         {
             std::string tilefile = iBasePath + getTileFileName(iMapID, tileX, tileY);
             FILE* tf = fopen(tilefile.c_str(), "rb");
@@ -487,15 +509,15 @@ namespace VMAP
                 }
                 for (uint32 i = 0; i < numSpawns && result; ++i)
                 {
-                    // read model spawns
+                    // 读取模型生成信息
                     ModelSpawn spawn;
                     result = ModelSpawn::readFromFile(tf, spawn);
                     if (result)
                     {
-                        // release model instance
+                        // 释放模型实例
                         vm->releaseModelInstance(spawn.name);
 
-                        // update tree
+                        // 更新树
                         uint32 referencedNode;
 
                         if (fread(&referencedNode, sizeof(uint32), 1, tf) != 1)
@@ -525,6 +547,7 @@ namespace VMAP
             "Map: " + std::to_string(iMapID) + " TileX: " + std::to_string(tileX) + " TileY: " + std::to_string(tileY));
     }
 
+    // 获取模型实例和数量
     void StaticMapTree::GetModelInstances(ModelInstance*& models, uint32& count)
     {
         models = iTreeValues;

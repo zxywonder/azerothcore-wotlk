@@ -1,4 +1,4 @@
-#ifndef _REGULAR_GRID_H
+﻿#ifndef _REGULAR_GRID_H
 #define _REGULAR_GRID_H
 
 #include <G3D/PositionTrait.h>
@@ -7,11 +7,14 @@
 
 #include "Errors.h"
 
+// 节点数组类，用于存储最多9个节点的固定大小数组
 template <class Node>
 class NodeArray
 {
 public:
     explicit NodeArray() { memset(&_nodes, 0, sizeof(_nodes)); }
+
+    // 添加节点到数组中（如果尚未存在）
     void AddNode(Node* n)
     {
         for (uint8 i = 0; i < 9; ++i)
@@ -25,15 +28,18 @@ public:
                 return;
             }
     }
-    Node* _nodes[9];
+
+    Node* _nodes[9]; // 存储节点的数组
 };
 
+// 节点创建器模板类，用于创建节点对象
 template<class Node>
 struct NodeCreator
 {
-    static Node* makeNode(int /*x*/, int /*y*/) { return new Node();}
+    static Node* makeNode(int /*x*/, int /*y*/) { return new Node(); }
 };
 
+// 二维规则网格模板类，用于空间分区和碰撞检测
 template<class T,
          class Node,
          class NodeCreatorFunc = NodeCreator<Node>,
@@ -43,24 +49,28 @@ template<class T,
 class RegularGrid2D
 {
 public:
+    // 网格单元数量（64x64）
     enum
     {
         CELL_NUMBER = 64,
     };
 
-#define HGRID_MAP_SIZE  (533.33333f * 64.f)     // shouldn't be changed
-#define CELL_SIZE       float(HGRID_MAP_SIZE/(float)CELL_NUMBER)
+#define HGRID_MAP_SIZE  (533.33333f * 64.f)     // 地图尺寸（不要修改）
+#define CELL_SIZE       float(HGRID_MAP_SIZE/(float)CELL_NUMBER) // 每个单元格的尺寸
 
+    // 成员表类型，用于存储对象到节点数组的映射
     typedef G3D::Table<const T*, NodeArray<Node>> MemberTable;
 
-    MemberTable memberTable;
-    Node* nodes[CELL_NUMBER][CELL_NUMBER];
+    MemberTable memberTable; // 对象到节点数组的映射表
+    Node* nodes[CELL_NUMBER][CELL_NUMBER]; // 二维网格中的各个节点
 
+    // 构造函数，初始化网格节点为null
     RegularGrid2D()
     {
         memset(nodes, 0, sizeof(nodes));
     }
 
+    // 析构函数，释放所有节点内存
     ~RegularGrid2D()
     {
         for (int x = 0; x < CELL_NUMBER; ++x)
@@ -70,6 +80,7 @@ public:
             }
     }
 
+    // 插入一个对象到网格中
     void insert(const T& value)
     {
         G3D::Vector3 pos[9];
@@ -110,6 +121,7 @@ public:
         memberTable.set(&value, na);
     }
 
+    // 从网格中移除一个对象
     void remove(const T& value)
     {
         NodeArray<Node>& na = memberTable[&value];
@@ -125,10 +137,11 @@ public:
             }
         }
 
-        // Remove the member
+        // 从成员表中移除该对象
         memberTable.remove(&value);
     }
 
+    // 平衡网格中的所有节点（优化性能）
     void balance()
     {
         for (int x = 0; x < CELL_NUMBER; ++x)
@@ -139,29 +152,37 @@ public:
                 }
     }
 
+    // 检查网格是否包含指定的对象
     bool contains(const T& value) const { return memberTable.containsKey(&value); }
+
+    // 获取网格中对象的总数
     int size() const { return memberTable.size(); }
 
+    // 单元格结构体，表示网格中的一个单元
     struct Cell
     {
         int x, y;
         bool operator == (const Cell& c2) const { return x == c2.x && y == c2.y;}
 
+        // 根据坐标计算对应的单元格
         static Cell ComputeCell(float fx, float fy)
         {
             Cell c = { int(fx * (1.f / CELL_SIZE) + (CELL_NUMBER / 2)), int(fy * (1.f / CELL_SIZE) + (CELL_NUMBER / 2)) };
             return c;
         }
 
+        // 检查单元格坐标是否有效
         bool isValid() const { return x >= 0 && x < CELL_NUMBER && y >= 0 && y < CELL_NUMBER;}
     };
 
+    // 根据坐标获取对应的网格节点
     Node& getGridFor(float fx, float fy)
     {
         Cell c = Cell::ComputeCell(fx, fy);
         return getGrid(c.x, c.y);
     }
 
+    // 获取指定坐标的网格节点（如果不存在则创建）
     Node& getGrid(int x, int y)
     {
         ASSERT(x < CELL_NUMBER && y < CELL_NUMBER);
@@ -172,14 +193,9 @@ public:
         return *nodes[x][y];
     }
 
+    // 射线检测函数（带终点位置）
     template<typename RayCallback>
-    void intersectRay(const G3D::Ray& ray, RayCallback& intersectCallback, float max_dist, bool stopAtFirstHit)
-    {
-        intersectRay(ray, intersectCallback, max_dist, ray.origin() + ray.direction() * max_dist, stopAtFirstHit);
-    }
-
-    template<typename RayCallback>
-    void intersectRay(const G3D::Ray& ray, RayCallback& intersectCallback, float& max_dist, const G3D::Vector3& end, bool stopAtFirstHit)
+    void intersectRay(const G3D::Ray& ray, RayCallback& intersectCallback, float max_dist, const G3D::Vector3& end, bool stopAtFirstHit)
     {
         Cell cell = Cell::ComputeCell(ray.origin().x, ray.origin().y);
         if (!cell.isValid())
@@ -230,16 +246,12 @@ public:
             tMaxY = (y_border - by) * ky_inv;
         }
 
-        //int Cycles = std::max((int)ceilf(max_dist/tMaxX),(int)ceilf(max_dist/tMaxY));
-        //int i = 0;
-
         float tDeltaX = voxel * std::fabs(kx_inv);
         float tDeltaY = voxel * std::fabs(ky_inv);
         do
         {
             if (Node* node = nodes[cell.x][cell.y])
             {
-                //float enterdist = max_dist;
                 node->intersectRay(ray, intersectCallback, max_dist, stopAtFirstHit);
             }
             if (cell == last_cell)
@@ -256,10 +268,10 @@ public:
                 tMaxY += tDeltaY;
                 cell.y += stepY;
             }
-            //++i;
         } while (cell.isValid());
     }
 
+    // 点检测函数，用于查询与指定点相交的对象
     template<typename IsectCallback>
     void intersectPoint(const G3D::Vector3& point, IsectCallback& intersectCallback)
     {
@@ -274,7 +286,7 @@ public:
         }
     }
 
-    // Optimized verson of intersectRay function for rays with vertical directions
+    // 优化版本的射线检测函数，专门用于垂直方向的射线
     template<typename RayCallback>
     void intersectZAllignedRay(const G3D::Ray& ray, RayCallback& intersectCallback, float& max_dist)
     {

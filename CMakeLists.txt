@@ -35,6 +35,11 @@ set(CMAKE_BUILD_WITH_INSTALL_RPATH 0)
 set(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib")
 set(CMAKE_INSTALL_RPATH_USE_LINK_PATH 1)
 
+if(WIN32)
+    add_compile_options($<$<CONFIG:RelWithDebInfo>:/Od>)
+    add_compile_options($<$<CONFIG:RelWithDebInfo>:/Ob0>)
+endif()
+
 # Export compile commands for IDE support
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
