@@ -151,7 +151,29 @@ foreach(APPLICATION_NAME ${APPLICATIONS_BUILD_LIST})
     if (WORLDSERVER_DYNAMIC_SCRIPT_MODULES_DEPENDENCIES)
       add_dependencies(${APP_PROJECT_NAME} ${WORLDSERVER_DYNAMIC_SCRIPT_MODULES_DEPENDENCIES})
     endif()
-   endif()
+
+     elseif(${APP_PROJECT_NAME} MATCHES "demo_test")
+    target_link_libraries(${APP_PROJECT_NAME}
+      PUBLIC
+        modules
+        scripts
+        game
+        gsoap
+        readline
+        gperftools)
+
+    if (UNIX AND NOT NOJEM)
+      set(${APP_PROJECT_NAME}_LINK_FLAGS "-pthread -lncurses ${${APP_PROJECT_NAME}_LINK_FLAGS}")
+    endif()
+
+    set_target_properties(${APP_PROJECT_NAME} PROPERTIES LINK_FLAGS "${${APP_PROJECT_NAME}_LINK_FLAGS}")
+
+    # Add all dynamic projects as dependency to the worldserver
+    if (WORLDSERVER_DYNAMIC_SCRIPT_MODULES_DEPENDENCIES)
+      add_dependencies(${APP_PROJECT_NAME} ${WORLDSERVER_DYNAMIC_SCRIPT_MODULES_DEPENDENCIES})
+    endif()
+
+    endif()
 
   unset(APP_PUBLIC_INCLUDES)
   CollectIncludeDirectories(
